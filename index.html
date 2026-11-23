@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SubPanel</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <div class="logo"><span class="mark">Aa</span><b>SubPanel</b></div>
+    <div class="host" id="host"><i></i><span id="hostName">…</span></div>
+  </header>
+
+  <main>
+    <section class="card preview">
+      <div class="frame" id="frame">
+        <div class="sub" id="sub">Привет, это пример субтитров!</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Заготовки</h2>
+        <button id="savePreset" class="ghost" type="button">+ Сохранить</button>
+      </div>
+      <div class="save-row" id="saveRow" hidden>
+        <input id="presetName" type="text" placeholder="Название заготовки" maxlength="28">
+        <button id="presetOk" class="small" type="button">Ок</button>
+      </div>
+      <div id="presets" class="chips"></div>
+      <label class="check"><input type="checkbox" id="instant"><span>Применять сразу при клике</span></label>
+    </section>
+
+    <section class="card">
+      <h2>Стиль</h2>
+
+      <label class="field">
+        <span>Шрифт <em>PostScript-имя</em></span>
+        <input id="font" type="text" list="fonts" spellcheck="false" autocomplete="off">
+        <datalist id="fonts"></datalist>
+      </label>
+
+      <div class="field">
+        <span>Размер</span>
+        <div class="slider">
+          <input id="size" type="range" min="12" max="240" step="1">
+          <input id="sizeNum" type="number" min="1" max="1000">
+        </div>
+      </div>
+
+      <div class="two">
+        <label class="field">
+          <span>Заливка</span>
+          <div class="color"><input id="fill" type="color"><code id="fillHex"></code></div>
+        </label>
+        <label class="field">
+          <span>Обводка</span>
+          <div class="color"><input id="stroke" type="color"><code id="strokeHex"></code></div>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>Толщина обводки</span>
+        <div class="slider">
+          <input id="strokeW" type="range" min="0" max="40" step="1">
+          <input id="strokeWNum" type="number" min="0" max="200">
+        </div>
+      </div>
+
+      <label class="check"><input type="checkbox" id="caps"><span>ВСЕ ЗАГЛАВНЫЕ</span></label>
+
+      <div class="field ae-only">
+        <span>Позиция по вертикали</span>
+        <div class="seg" id="posSeg">
+          <button type="button" data-y="14">Верх</button>
+          <button type="button" data-y="50">Центр</button>
+          <button type="button" data-y="86">Низ</button>
+        </div>
+        <div class="slider">
+          <input id="y" type="range" min="0" max="100" step="1">
+          <input id="yNum" type="number" min="0" max="100">
+        </div>
+        <label class="check"><input type="checkbox" id="applyPos"><span>Менять позицию слоя</span></label>
+      </div>
+
+      <button id="apply" class="primary" type="button">Применить к выделенному</button>
+      <p class="hint" id="applyHint"></p>
+    </section>
+
+    <section class="card">
+      <h2>Знаки препинания</h2>
+      <div id="marks" class="chips marks"></div>
+      <button id="strip" class="primary alt" type="button">Убрать знаки в выделенном</button>
+      <p class="hint" id="stripHint"></p>
+
+      <div class="pr-only">
+        <div class="row">
+          <button id="clip" class="ghost wide" type="button">Из буфера обмена</button>
+          <button id="srt" class="ghost wide" type="button">SRT-файл</button>
+        </div>
+        <details>
+          <summary>Вручную, если буфер не работает</summary>
+          <textarea id="manual" rows="5" placeholder="Вставь текст субтитров сюда (Ctrl+V)"></textarea>
+          <div class="row">
+            <button id="manualClean" class="ghost wide" type="button">Очистить</button>
+            <button id="manualCopy" class="ghost wide" type="button">Копировать</button>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" role="status"></div>
+  <script src="js/main.js"></script>
+</body>
+</html>
