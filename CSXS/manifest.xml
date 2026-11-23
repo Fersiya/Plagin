@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.fersiya.subpanel" ExtensionBundleVersion="1.1.1" ExtensionBundleName="SubPanel">
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.fersiya.subpanel" ExtensionBundleVersion="1.1.2" ExtensionBundleName="SubPanel">
   <ExtensionList>
-    <Extension Id="com.fersiya.subpanel.panel" Version="1.1.1"/>
+    <Extension Id="com.fersiya.subpanel.panel" Version="1.1.2"/>
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
