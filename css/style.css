@@ -228,3 +228,5 @@ body.pr .ae-only { display: none; }
   background: var(--accent-2); color: #04252b; font-weight: 700;
 }
 .update button.x { background: none; color: var(--dim); padding: 0 4px; font-size: 16px; }
+
+[hidden] { display: none !important; }
