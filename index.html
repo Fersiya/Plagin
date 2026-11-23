@@ -28,8 +28,13 @@
     <section class="card">
       <div class="card-head">
         <h2>Заготовки</h2>
-        <button id="savePreset" class="ghost" type="button">+ Сохранить</button>
+        <div class="head-actions">
+          <button id="importPreset" class="ghost tiny" type="button" title="Импортировать заготовки из JSON">Импорт</button>
+          <button id="exportPreset" class="ghost tiny" type="button" title="Экспортировать свои заготовки в JSON">Экспорт</button>
+          <button id="savePreset" class="ghost tiny" type="button">+ Сохранить</button>
+        </div>
       </div>
+      <input type="file" id="presetFileInput" accept=".json" style="display:none">
       <div class="save-row" id="saveRow" hidden>
         <input id="presetName" type="text" placeholder="Название заготовки" maxlength="28">
         <button id="presetOk" class="small" type="button">Ок</button>
@@ -74,6 +79,23 @@
         </div>
       </div>
 
+      <div class="field">
+        <span>Выравнивание</span>
+        <div class="seg" id="alignSeg">
+          <button type="button" data-align="left">Слева</button>
+          <button type="button" data-align="center">По центру</button>
+          <button type="button" data-align="right">Справа</button>
+        </div>
+      </div>
+
+      <div class="field ae-only">
+        <span>Интервал (Tracking)</span>
+        <div class="slider">
+          <input id="tracking" type="range" min="-50" max="150" step="1">
+          <input id="trackingNum" type="number" min="-200" max="500">
+        </div>
+      </div>
+
       <label class="check"><input type="checkbox" id="caps"><span>ВСЕ ЗАГЛАВНЫЕ</span></label>
 
       <div class="field ae-only">
@@ -95,7 +117,13 @@
     </section>
 
     <section class="card">
-      <h2>Знаки препинания</h2>
+      <div class="card-head">
+        <h2>Знаки препинания</h2>
+        <div class="head-actions">
+          <button id="marksAll" class="ghost tiny" type="button">Все</button>
+          <button id="marksReset" class="ghost tiny" type="button">Сброс</button>
+        </div>
+      </div>
       <div id="marks" class="chips marks"></div>
       <button id="strip" class="primary alt" type="button">Убрать знаки в выделенном</button>
       <p class="hint" id="stripHint"></p>

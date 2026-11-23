@@ -17,6 +17,9 @@ var SP_HOST = (function () {
 /* ---------- JSON ---------- */
 
 function sp_parse(text) {
+  if (typeof JSON !== 'undefined' && JSON.parse) {
+    try { return JSON.parse(text); } catch (ej) {}
+  }
   var probe = String(text)
     .replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g, '@')
     .replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, ']')
@@ -36,6 +39,9 @@ function sp_esc(s) {
 }
 
 function sp_str(v) {
+  if (typeof JSON !== 'undefined' && JSON.stringify) {
+    try { return JSON.stringify(v); } catch (ej) {}
+  }
   var t = typeof v, i, parts, k;
   if (v === null || v === undefined) return 'null';
   if (t === 'number') return isFinite(v) ? String(v) : 'null';
@@ -128,6 +134,10 @@ function ae_apply(d) {
   try {
     for (i = 0; i < t.layers.length; i++) {
       layer = t.layers[i];
+      if (layer.locked) {
+        skipped++;
+        continue;
+      }
       try {
         ae_each_doc(ae_srctext(layer), function (td) {
           if (d.font) {
@@ -144,16 +154,38 @@ function ae_apply(d) {
             td.applyStroke = false;
           }
           try { td.allCaps = !!d.caps; } catch (ec) {}
-          td.justification = ParagraphJustification.CENTER_JUSTIFY;
+          if (d.tracking !== undefined && d.tracking !== null) {
+            try { td.tracking = Number(d.tracking); } catch (etr) {}
+          }
+          if (d.align === 'left') {
+            td.justification = ParagraphJustification.LEFT_JUSTIFY;
+          } else if (d.align === 'right') {
+            td.justification = ParagraphJustification.RIGHT_JUSTIFY;
+          } else {
+            td.justification = ParagraphJustification.CENTER_JUSTIFY;
+          }
           return true;
         });
         if (d.applyPos) {
+          var xTarget = comp.width / 2;
+          if (d.align === 'left') xTarget = comp.width * 0.15;
+          else if (d.align === 'right') xTarget = comp.width * 0.85;
+
           var pos = layer.property('ADBE Transform Group').property('ADBE Position');
-          if (pos.numKeys === 0 && !pos.expressionEnabled) {
-            var cur = pos.value;
-            var np = [comp.width / 2, comp.height * (d.y / 100)];
-            if (cur.length === 3) np.push(cur[2]);
-            pos.setValue(np);
+          if (pos) {
+            if (pos.dimensionsSeparated) {
+              var posX = layer.property('ADBE Transform Group').property('ADBE Position_0');
+              var posY = layer.property('ADBE Transform Group').property('ADBE Position_1');
+              if (posX && posY && posX.numKeys === 0 && posY.numKeys === 0 && !posX.expressionEnabled && !posY.expressionEnabled) {
+                posX.setValue(xTarget);
+                posY.setValue(comp.height * (d.y / 100));
+              }
+            } else if (pos.numKeys === 0 && !pos.expressionEnabled) {
+              var cur = pos.value;
+              var np = [xTarget, comp.height * (d.y / 100)];
+              if (cur.length === 3) np.push(cur[2]);
+              pos.setValue(np);
+            }
           }
         }
         done++;
@@ -173,6 +205,10 @@ function ae_strip(d) {
   app.beginUndoGroup('SubPanel: strip');
   try {
     for (i = 0; i < t.layers.length; i++) {
+      if (t.layers[i].locked) {
+        skipped++;
+        continue;
+      }
       try {
         var n = ae_each_doc(ae_srctext(t.layers[i]), function (td) {
           var before = td.text;
@@ -223,16 +259,31 @@ function pr_seq() {
   return s;
 }
 
-function pr_selected_graphics() {
-  var seq = pr_seq(), sel = [], out = [], i, c;
+function pr_targets() {
+  var seq = pr_seq(), sel = [], out = [], i, t, c, clip, comp;
   try { sel = seq.getSelection(); } catch (e) {}
   for (i = 0; i < sel.length; i++) {
     try {
-      c = sel[i].getMGTComponent();
-      if (c) out.push(c);
+      comp = sel[i].getMGTComponent();
+      if (comp) out.push(comp);
     } catch (e2) {}
   }
-  return out;
+  if (out.length) return { comps: out, scope: 'selected' };
+
+  // Если ничего не выделено — сканируем все видеодорожки активной секвенции
+  try {
+    for (t = 0; t < seq.videoTracks.numTracks; t++) {
+      var trk = seq.videoTracks[t];
+      for (c = 0; c < trk.clips.numItems; c++) {
+        clip = trk.clips[c];
+        try {
+          comp = clip.getMGTComponent();
+          if (comp) out.push(comp);
+        } catch (e3) {}
+      }
+    }
+  } catch (e4) {}
+  return { comps: out, scope: 'all' };
 }
 
 function pr_text_param(comp) {
@@ -275,7 +326,7 @@ function pr_put(o, keys, val) {
 }
 
 function pr_strip(d) {
-  var comps = pr_selected_graphics(), i, p, before, mid, after, removed = 0, touched = 0;
+  var t = pr_targets(), comps = t.comps, i, p, before, mid, after, removed = 0, touched = 0;
   if (!comps.length) throw new Error('NO_GRAPHICS');
   for (i = 0; i < comps.length; i++) {
     p = pr_text_param(comps[i]);
@@ -289,11 +340,11 @@ function pr_strip(d) {
     p.prop.setValue(sp_str(p.obj), true);
     touched++;
   }
-  return { ok: true, code: 'pr_stripped', removed: removed, clips: touched, total: comps.length };
+  return { ok: true, code: 'pr_stripped', removed: removed, clips: touched, total: comps.length, scope: t.scope };
 }
 
 function pr_apply(d) {
-  var comps = pr_selected_graphics(), i, p, changed, touched = 0;
+  var t = pr_targets(), comps = t.comps, i, p, changed, touched = 0;
   if (!comps.length) throw new Error('NO_GRAPHICS');
   for (i = 0; i < comps.length; i++) {
     p = pr_text_param(comps[i]);
@@ -301,17 +352,25 @@ function pr_apply(d) {
     changed = 0;
     if (d.size) changed += pr_put(p.obj, ['fontSize', 'fontSizeEditValue'], d.size);
     if (d.font) changed += pr_put(p.obj, ['fontEditValue', 'fontFSName'], d.font);
+    if (d.align) {
+      var alignNum = d.align === 'left' ? 0 : (d.align === 'right' ? 2 : 1);
+      changed += pr_put(p.obj, ['justification', 'alignment', 'paraAlignment', 'paragraphJustification'], alignNum);
+    }
+    if (d.caps !== undefined) {
+      changed += pr_put(p.obj, ['allCaps', 'isAllCaps', 'capitalization'], d.caps ? 1 : 0);
+    }
     if (changed) {
       p.prop.setValue(sp_str(p.obj), true);
       touched++;
     }
   }
   if (!touched) throw new Error('NO_PARAMS');
-  return { ok: true, code: 'pr_applied', clips: touched, total: comps.length };
+  return { ok: true, code: 'pr_applied', clips: touched, total: comps.length, scope: t.scope };
 }
 
 function pr_find_item(bin, wanted) {
-  var i, it, found, n = bin.children.numItems, mp;
+  var i, it, found, n = bin.children.numItems, mp, nm;
+  var wantedBase = wanted.substring(wanted.lastIndexOf('/') + 1).toLowerCase();
   for (i = 0; i < n; i++) {
     it = bin.children[i];
     try {
@@ -320,7 +379,8 @@ function pr_find_item(bin, wanted) {
         if (found) return found;
       } else {
         mp = String(it.getMediaPath()).replace(/\\/g, '/').toLowerCase();
-        if (mp === wanted) return it;
+        nm = String(it.name).toLowerCase();
+        if (mp === wanted || nm === wantedBase) return it;
       }
     } catch (e) {}
   }
@@ -334,7 +394,8 @@ function pr_import_srt(d) {
   item = pr_find_item(app.project.rootItem, String(d.path).replace(/\\/g, '/').toLowerCase());
   if (item) {
     try {
-      seq.createCaptionTrack(item, 0, Sequence.CAPTION_FORMAT_SUBTITLE);
+      var format = (typeof Sequence !== 'undefined' && Sequence.CAPTION_FORMAT_SUBTITLE !== undefined) ? Sequence.CAPTION_FORMAT_SUBTITLE : 0;
+      seq.createCaptionTrack(item, 0, format);
       track = true;
     } catch (e) {}
   }

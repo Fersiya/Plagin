@@ -6,7 +6,7 @@ SetCompressor /SOLID lzma
 
 !define APPNAME "SubPanel"
 !define EXTID "com.fersiya.subpanel"
-!define VERSION "1.1.2"
+!define VERSION "1.2.0"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${EXTID}"
 
 Name "${APPNAME} ${VERSION}"
@@ -39,13 +39,16 @@ Section "Install"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   ; Неподписанные панели CEP загружаются только при включённом PlayerDebugMode.
-  ${ForEach} $0 9 13 + 1
+  ; Включаем для версий CSXS 9-20 (Adobe CC 2019 - 2026+)
+  ${ForEach} $0 9 20 + 1
     WriteRegStr HKCU "Software\Adobe\CSXS.$0" "PlayerDebugMode" "1"
   ${Next}
 
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${APPNAME}"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "Fersiya"
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKCU "${UNINST_KEY}" "URLInfoAbout" "https://github.com/Fersiya/Plagin"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1

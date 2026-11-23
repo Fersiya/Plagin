@@ -1,0 +1,44 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup NSIS
+        run: |
+          winget install NSIS.NSIS --accept-source-agreements --accept-package-agreements
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+
+      - name: Build Installer
+        shell: pwsh
+        run: |
+          ./build.ps1
+
+      - name: Generate Checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 dist/SubPanel-Setup.exe).Hash.ToLower()
+          "$hash  SubPanel-Setup.exe" | Out-File -Encoding utf8 dist/SHA256SUMS.txt
+          Write-Host "SHA256: $hash"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/SubPanel-Setup.exe
+            dist/SHA256SUMS.txt
+          generate_release_notes: true

@@ -4,7 +4,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = '1.1.2';
+  const APP_VERSION = '1.2.0';
   const REPO = 'Fersiya/Plagin';
   const ASSET = 'SubPanel-Setup.exe';
   const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
@@ -17,14 +17,17 @@
 
   /* ---------- данные ---------- */
 
-  const DEFAULT_STYLE = { font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, y: 86 };
+  const DEFAULT_STYLE = { font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, align: 'center', tracking: 0, y: 86 };
 
   const BUILTIN = [
-    { id: 'b-classic', name: 'Классика', font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, y: 86 },
-    { id: 'b-shorts', name: 'Шортс', font: 'Impact', size: 96, fill: '#ffe600', stroke: '#000000', strokeW: 12, caps: true, y: 68 },
-    { id: 'b-minimal', name: 'Минимал', font: 'ArialMT', size: 44, fill: '#ffffff', stroke: '#000000', strokeW: 0, caps: false, y: 90 },
-    { id: 'b-neon', name: 'Неон', font: 'Verdana-Bold', size: 64, fill: '#00f0ff', stroke: '#06306b', strokeW: 10, caps: false, y: 80 },
-    { id: 'b-karaoke', name: 'Караоке', font: 'Arial-BoldMT', size: 78, fill: '#ffffff', stroke: '#7a3cff', strokeW: 14, caps: true, y: 50 },
+    { id: 'b-classic', name: 'Классика', font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, align: 'center', tracking: 0, y: 86 },
+    { id: 'b-shorts', name: 'Шортс', font: 'Impact', size: 96, fill: '#ffe600', stroke: '#000000', strokeW: 12, caps: true, align: 'center', tracking: 10, y: 68 },
+    { id: 'b-mrbeast', name: 'МистерБист', font: 'Impact', size: 90, fill: '#38ef7d', stroke: '#000000', strokeW: 14, caps: true, align: 'center', tracking: 5, y: 50 },
+    { id: 'b-tiktok', name: 'ТикТок', font: 'Arial-BoldMT', size: 72, fill: '#ffffff', stroke: '#000000', strokeW: 8, caps: true, align: 'center', tracking: 5, y: 82 },
+    { id: 'b-cinema', name: 'Кино', font: 'Georgia-Bold', size: 48, fill: '#f4f4f4', stroke: '#000000', strokeW: 2, caps: false, align: 'center', tracking: 25, y: 90 },
+    { id: 'b-neon', name: 'Неон', font: 'Verdana-Bold', size: 64, fill: '#00f0ff', stroke: '#06306b', strokeW: 10, caps: false, align: 'center', tracking: 10, y: 80 },
+    { id: 'b-karaoke', name: 'Караоке', font: 'Arial-BoldMT', size: 78, fill: '#ffffff', stroke: '#7a3cff', strokeW: 14, caps: true, align: 'center', tracking: 5, y: 50 },
+    { id: 'b-minimal', name: 'Минимал', font: 'ArialMT', size: 44, fill: '#ffffff', stroke: '#000000', strokeW: 0, caps: false, align: 'center', tracking: 0, y: 90 },
   ];
 
   const MARKS = [
@@ -36,14 +39,19 @@
     { ch: ':', label: ':', on: false },
     { ch: ';', label: ';', on: false },
     { ch: '—–', label: '—', on: false },
+    { ch: '-–—', label: '-/—', on: false },
     { ch: '"“”', label: '"', on: false },
     { ch: '«»', label: '«»', on: false },
+    { ch: '\'’`', label: '\'', on: false },
+    { ch: '()', label: '( )', on: false },
+    { ch: '[]', label: '[ ]', on: false },
   ];
 
   const COMMON_FONTS = [
-    'Arial-BoldMT', 'ArialMT', 'Arial-Black', 'Impact', 'Verdana', 'Verdana-Bold', 'Tahoma-Bold',
-    'SegoeUI', 'SegoeUI-Bold', 'SegoeUI-Black', 'TrebuchetMS-Bold', 'Calibri-Bold', 'Georgia-Bold',
-    'TimesNewRomanPS-BoldMT', 'CourierNewPS-BoldMT', 'ComicSansMS-Bold',
+    'Arial-BoldMT', 'ArialMT', 'Arial-Black', 'Impact', 'Montserrat-Bold', 'Montserrat-Black',
+    'Roboto-Bold', 'Roboto-Black', 'BebasNeueBold', 'Inter-Bold', 'Oswald-Bold', 'Verdana',
+    'Verdana-Bold', 'Tahoma-Bold', 'SegoeUI', 'SegoeUI-Bold', 'SegoeUI-Black', 'TrebuchetMS-Bold',
+    'Calibri-Bold', 'Georgia-Bold', 'TimesNewRomanPS-BoldMT', 'CourierNewPS-BoldMT', 'ComicSansMS-Bold',
   ];
 
   const MSG = {
@@ -109,9 +117,11 @@
             (r.skipped ? '. Пропущено: ' + r.skipped : '')
           : 'Выбранных знаков в тексте нет.';
       case 'pr_applied':
-        return 'Применено к клипам: ' + r.clips + ' из ' + r.total + '.';
+        return 'Применено к клипам: ' + r.clips + ' из ' + r.total + (r.scope === 'all' ? ' (ничего не было выделено — обработал все клипы)' : '') + '.';
       case 'pr_stripped':
-        return r.removed ? 'Убрано знаков: ' + r.removed + ' в клипах: ' + r.clips + ' из ' + r.total + '.' : 'Выбранных знаков в тексте нет.';
+        return r.removed
+          ? 'Убрано знаков: ' + r.removed + ' в клипах: ' + r.clips + ' из ' + r.total + (r.scope === 'all' ? ' (ничего не было выделено — обработал все клипы)' : '') + '.'
+          : 'Выбранных знаков в тексте нет.';
       case 'srt_imported':
         return r.track
           ? 'Готово: чистый SRT импортирован и добавлен дорожкой подписей.'
@@ -154,12 +164,20 @@
   function stripText(text) {
     const chars = Array.from(charsToStrip());
     let out = String(text);
+    if (st.marks.indexOf('…') > -1) {
+      out = out.replace(/\.{3,}/g, '');
+    }
     for (const ch of chars) out = out.split(ch).join('');
+    // Если выбран дефис/тире, убираем также диалоговые тире в начале строк
+    if (st.marks.indexOf('-–—') > -1 || st.marks.indexOf('—–') > -1) {
+      out = out.replace(/(^|\r?\n)[ \t]*[-–—][ \t]*/g, '$1');
+    }
     return out.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+(\r?\n|$)/g, '$1').replace(/(^|\n)[ \t]+/g, '$1');
   }
 
   function stripSrt(text) {
-    return text.split(/\r?\n/).map((line) => (/^\d+$/.test(line.trim()) || line.indexOf('-->') > -1 ? line : stripText(line))).join('\n');
+    const cleanText = String(text).replace(/^\uFEFF/, '');
+    return cleanText.split(/\r?\n/).map((line) => (/^\d+$/.test(line.trim()) || line.indexOf('-->') > -1 ? line : stripText(line))).join('\r\n');
   }
 
   /* ---------- интерфейс ---------- */
@@ -190,6 +208,8 @@
     sub.style.textTransform = st.caps ? 'uppercase' : 'none';
     sub.style.textShadow = outline((st.strokeW * scale) / 2, st.stroke);
     sub.style.top = st.y + '%';
+    sub.style.textAlign = st.align || 'center';
+    sub.style.letterSpacing = ((st.tracking || 0) * scale * 0.15).toFixed(1) + 'px';
   }
 
   function chipStyle(aa, p) {
@@ -236,7 +256,18 @@
   }
 
   function choosePreset(p) {
-    st = Object.assign(st, { font: p.font, size: p.size, fill: p.fill, stroke: p.stroke, strokeW: p.strokeW, caps: p.caps, y: p.y, activeId: p.id });
+    st = Object.assign(st, {
+      font: p.font,
+      size: p.size,
+      fill: p.fill,
+      stroke: p.stroke,
+      strokeW: p.strokeW,
+      caps: p.caps,
+      align: p.align || 'center',
+      tracking: p.tracking || 0,
+      y: p.y,
+      activeId: p.id
+    });
     syncInputs();
     renderPresets();
     renderPreview();
@@ -273,11 +304,14 @@
     $('#strokeW').value = st.strokeW;
     $('#strokeWNum').value = st.strokeW;
     $('#caps').checked = !!st.caps;
+    $('#tracking').value = st.tracking || 0;
+    $('#trackingNum').value = st.tracking || 0;
     $('#y').value = st.y;
     $('#yNum').value = st.y;
     $('#applyPos').checked = !!st.applyPos;
     $('#instant').checked = !!st.instant;
     $$('#posSeg button').forEach((b) => b.classList.toggle('on', Number(b.dataset.y) === Number(st.y)));
+    $$('#alignSeg button').forEach((b) => b.classList.toggle('on', (b.dataset.align || 'center') === (st.align || 'center')));
   }
 
   function bind(id, key, parse, after) {
@@ -324,7 +358,18 @@
   /* ---------- действия ---------- */
 
   async function onApply() {
-    const r = await callHost('apply', { font: st.font.trim(), size: st.size, fill: st.fill, stroke: st.stroke, strokeW: st.strokeW, caps: st.caps, y: st.y, applyPos: st.applyPos });
+    const r = await callHost('apply', {
+      font: st.font.trim(),
+      size: st.size,
+      fill: st.fill,
+      stroke: st.stroke,
+      strokeW: st.strokeW,
+      caps: st.caps,
+      align: st.align || 'center',
+      tracking: st.tracking || 0,
+      y: st.y,
+      applyPos: st.applyPos
+    });
     toast(describe(r), !r.ok);
   }
 
@@ -403,13 +448,13 @@
     return false;
   }
 
-  // Качает только с github.com и githubusercontent.com по https, редиректы проверяются на каждом шаге.
+  // Качает только с github.com, githubusercontent.com и s3/blob хранилищ релизов по https, редиректы проверяются на каждом шаге.
   function httpsGet(url, accept, hops) {
     hops = hops || 0;
     return new Promise((resolve, reject) => {
       let u;
       try { u = new URL(url); } catch (e) { reject(new Error('bad url')); return; }
-      if (u.protocol !== 'https:' || !/(^|\.)github(usercontent)?\.com$/.test(u.hostname)) { reject(new Error('host not allowed')); return; }
+      if (u.protocol !== 'https:' || !/(^|\.)(github\.com|githubusercontent\.com|amazonaws\.com)$/.test(u.hostname)) { reject(new Error('host not allowed')); return; }
       const req = nodeReq('https').get(u, { headers: { 'User-Agent': 'SubPanel-updater', Accept: accept } }, (res) => {
         if ([301, 302, 303, 307, 308].indexOf(res.statusCode) > -1 && res.headers.location) {
           res.resume();
@@ -503,6 +548,49 @@
       : 'Работает и с субтитрами, собранными в одном слое по ключам.';
   }
 
+  function exportPresets() {
+    if (!userPresets.length) {
+      toast('Нет сохранённых заготовок для экспорта.', true);
+      return;
+    }
+    try {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(userPresets, null, 2));
+      const a = document.createElement('a');
+      a.setAttribute('href', dataStr);
+      a.setAttribute('download', 'subpanel-presets.json');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast('Заготовки экспортированы в subpanel-presets.json');
+    } catch (e) {
+      toast('Ошибка экспорта заготовок.', true);
+    }
+  }
+
+  function importPresets(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (!Array.isArray(imported)) throw new Error('not array');
+        let added = 0;
+        imported.forEach((p) => {
+          if (p && p.name && p.font) {
+            userPresets.push(Object.assign({}, DEFAULT_STYLE, p, { id: 'u-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4) }));
+            added++;
+          }
+        });
+        save();
+        renderPresets();
+        toast('Импортировано заготовок: ' + added);
+      } catch (err) {
+        toast('Неверный формат JSON-файла заготовок.', true);
+      }
+    };
+    reader.readAsText(file);
+  }
+
   async function init() {
     bind('#font', 'font', (v) => v, null);
     bind('#size', 'size', num(1, 1000));
@@ -511,6 +599,8 @@
     bind('#stroke', 'stroke', (v) => v);
     bind('#strokeW', 'strokeW', num(0, 200));
     bind('#strokeWNum', 'strokeW', num(0, 200));
+    bind('#tracking', 'tracking', num(-200, 500));
+    bind('#trackingNum', 'tracking', num(-200, 500));
     bind('#caps', 'caps', (v) => !!v);
     bind('#y', 'y', num(0, 100));
     bind('#yNum', 'y', num(0, 100));
@@ -523,6 +613,30 @@
       syncInputs(); renderPresets(); renderPreview(); save();
     }));
 
+    $$('#alignSeg button').forEach((b) => b.addEventListener('click', () => {
+      st.align = b.dataset.align || 'center';
+      st.activeId = null;
+      syncInputs(); renderPresets(); renderPreview(); save();
+    }));
+
+    $('#marksAll').addEventListener('click', () => {
+      st.marks = MARKS.map((m) => m.ch);
+      renderMarks(); save();
+    });
+    $('#marksReset').addEventListener('click', () => {
+      st.marks = MARKS.filter((m) => m.on).map((m) => m.ch);
+      renderMarks(); save();
+    });
+
+    $('#exportPreset').addEventListener('click', exportPresets);
+    $('#importPreset').addEventListener('click', () => $('#presetFileInput').click());
+    $('#presetFileInput').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length) {
+        importPresets(e.target.files[0]);
+        e.target.value = '';
+      }
+    });
+
     $('#savePreset').addEventListener('click', () => {
       $('#saveRow').hidden = !$('#saveRow').hidden;
       if (!$('#saveRow').hidden) $('#presetName').focus();
@@ -530,7 +644,19 @@
     const savePreset = () => {
       const name = $('#presetName').value.trim();
       if (!name) { toast('Введи название заготовки.', true); return; }
-      const p = { id: 'u-' + Date.now(), name, font: st.font, size: st.size, fill: st.fill, stroke: st.stroke, strokeW: st.strokeW, caps: st.caps, y: st.y };
+      const p = {
+        id: 'u-' + Date.now(),
+        name,
+        font: st.font,
+        size: st.size,
+        fill: st.fill,
+        stroke: st.stroke,
+        strokeW: st.strokeW,
+        caps: st.caps,
+        align: st.align || 'center',
+        tracking: st.tracking || 0,
+        y: st.y
+      };
       userPresets.push(p);
       st.activeId = p.id;
       $('#presetName').value = '';
