@@ -4,7 +4,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = '1.1.0';
+  const APP_VERSION = '1.1.1';
   const REPO = 'Fersiya/Plagin';
   const ASSET = 'SubPanel-Setup.exe';
   const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
