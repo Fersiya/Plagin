@@ -4,6 +4,11 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
+  const APP_VERSION = '1.1.0';
+  const REPO = 'Fersiya/Plagin';
+  const ASSET = 'SubPanel-Setup.exe';
+  const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
+
   const KEY_PRESETS = 'subpanel.presets.v1';
   const KEY_STATE = 'subpanel.state.v1';
 
@@ -384,6 +389,100 @@
     return callHost('srt', { path: out }).then((r) => toast(r.ok ? describe(r) : 'Сохранил ' + out + '. ' + describe(r), !r.ok));
   }
 
+
+  /* ---------- обновления ---------- */
+
+  let update = null;
+
+  function isNewer(a, b) {
+    const pa = String(a).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < 3; i++) {
+      if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+    }
+    return false;
+  }
+
+  // Качает только с github.com и githubusercontent.com по https, редиректы проверяются на каждом шаге.
+  function httpsGet(url, accept, hops) {
+    hops = hops || 0;
+    return new Promise((resolve, reject) => {
+      let u;
+      try { u = new URL(url); } catch (e) { reject(new Error('bad url')); return; }
+      if (u.protocol !== 'https:' || !/(^|\.)github(usercontent)?\.com$/.test(u.hostname)) { reject(new Error('host not allowed')); return; }
+      const req = nodeReq('https').get(u, { headers: { 'User-Agent': 'SubPanel-updater', Accept: accept } }, (res) => {
+        if ([301, 302, 303, 307, 308].indexOf(res.statusCode) > -1 && res.headers.location) {
+          res.resume();
+          if (hops >= 5) { reject(new Error('too many redirects')); return; }
+          resolve(httpsGet(new URL(res.headers.location, u).toString(), accept, hops + 1));
+          return;
+        }
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) }));
+        res.on('error', reject);
+      });
+      req.on('error', reject);
+      req.setTimeout(30000, () => req.destroy(new Error('timeout')));
+    });
+  }
+
+  function openUrl(url) {
+    try { window.__adobe_cep__.openURLInDefaultBrowser(url); } catch (e) { /* вне Adobe */ }
+  }
+
+  async function checkUpdate() {
+    try {
+      const api = 'https://api.github.com/repos/' + REPO + '/releases/latest';
+      let rel;
+      if (nodeReq) {
+        const r = await httpsGet(api, 'application/vnd.github+json');
+        if (r.status !== 200) return;
+        rel = JSON.parse(r.body.toString('utf8'));
+      } else {
+        const r = await fetch(api);
+        if (!r.ok) return;
+        rel = await r.json();
+      }
+      if (!rel.tag_name || !isNewer(rel.tag_name, APP_VERSION)) return;
+      const asset = (rel.assets || []).find((a) => a.name === ASSET);
+      update = {
+        version: rel.tag_name.replace(/^v/, ''),
+        url: asset ? asset.browser_download_url : null,
+        digest: asset && asset.digest ? String(asset.digest) : null,
+        page: rel.html_url || 'https://github.com/' + REPO + '/releases/latest',
+      };
+      $('#updateText').textContent = 'Доступна версия ' + update.version;
+      $('#update').hidden = false;
+    } catch (e) { /* нет сети или лимит GitHub — молча пропускаем */ }
+  }
+
+  async function installUpdate() {
+    if (!update) return;
+    if (!nodeReq || !update.url) { openUrl(update.page); return; }
+    const btn = $('#updateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Скачиваю…';
+    try {
+      const r = await httpsGet(update.url, '*/*');
+      if (r.status !== 200 || r.body.length < 50000 || r.body[0] !== 0x4d || r.body[1] !== 0x5a) throw new Error('bad download');
+      if (update.digest && /^sha256:/i.test(update.digest)) {
+        const h = nodeReq('crypto').createHash('sha256').update(r.body).digest('hex');
+        if (h !== update.digest.slice(7).toLowerCase()) throw new Error('hash mismatch');
+      }
+      const file = nodeReq('path').join(nodeReq('os').tmpdir(), 'SubPanel-Setup-' + update.version + '.exe');
+      nodeReq('fs').writeFileSync(file, r.body);
+      nodeReq('child_process').spawn(file, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+      $('#updateText').textContent = 'Версия ' + update.version + ' ставится. Перезапусти Pr/AE через пару секунд.';
+      btn.hidden = true;
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Обновить';
+      toast('Не удалось обновить автоматически — открываю страницу релиза.', true);
+      openUrl(update.page);
+    }
+  }
+
   /* ---------- запуск ---------- */
 
   function setHost(name) {
@@ -457,6 +556,10 @@
       toast(document.execCommand('copy') ? 'Скопировано.' : 'Не удалось скопировать — нажми Ctrl+C.', false);
     });
 
+    $('#updateBtn').addEventListener('click', installUpdate);
+    $('#updateClose').addEventListener('click', () => { $('#update').hidden = true; });
+    $('#ver').textContent = 'v' + APP_VERSION;
+
     window.addEventListener('resize', renderPreview);
 
     syncInputs();
@@ -472,6 +575,7 @@
       const f = await callHost('fonts');
       if (f.ok && f.fonts && f.fonts.length) initFonts(f.fonts);
     }
+    if (inCEP || mock) checkUpdate();
   }
 
   document.addEventListener('DOMContentLoaded', init);

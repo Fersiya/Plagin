@@ -8,9 +8,15 @@
 </head>
 <body>
   <header>
-    <div class="logo"><span class="mark">Aa</span><b>SubPanel</b></div>
+    <div class="logo"><span class="mark">Aa</span><b>SubPanel</b><small id="ver"></small></div>
     <div class="host" id="host"><i></i><span id="hostName">…</span></div>
   </header>
+
+  <div class="update" id="update" hidden>
+    <span id="updateText"></span>
+    <button id="updateBtn" type="button">Обновить</button>
+    <button id="updateClose" class="x" type="button" title="Скрыть">×</button>
+  </div>
 
   <main>
     <section class="card preview">

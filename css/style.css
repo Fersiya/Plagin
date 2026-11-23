@@ -211,3 +211,19 @@ body.pr .ae-only { display: none; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+
+.logo small { color: var(--dim); font-weight: 400; font-size: 11px; }
+
+.update {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 12px 0; padding: 8px 10px;
+  border-radius: 10px; border: 1px solid var(--accent-2);
+  background: rgba(34, 211, 238, .1);
+}
+.update[hidden] { display: none; }
+.update span { flex: 1; font-weight: 600; }
+.update button {
+  border: 0; border-radius: 7px; padding: 5px 10px;
+  background: var(--accent-2); color: #04252b; font-weight: 700;
+}
+.update button.x { background: none; color: var(--dim); padding: 0 4px; font-size: 16px; }
