@@ -161,6 +161,46 @@ function sp_censor(text, words, style) {
   return out;
 }
 
+function sp_typo(text) {
+  if (text === null || text === undefined || text === '') return text;
+  var s = String(text);
+
+  // 1. Multiple spaces -> single space
+  s = s.replace(/[ \t]{2,}/g, ' ');
+
+  // 2. Dashes: " -- " or " - " between words -> em-dash " — "
+  s = s.replace(/(\s)-{1,2}(\s)/g, '$1—$2');
+  // Dialogue dash at start of line: "- " or "-- " -> "— "
+  s = s.replace(/(^|\r\n|[\r\n])-{1,2}\s+/g, '$1— ');
+
+  // 3. Ellipsis: "..." -> "…"
+  s = s.replace(/\.{3}/g, '…');
+
+  // 4. Russian quotes: convert straight quotes "text" into «text»
+  var inQuote = false;
+  var chars = s.split('');
+  for (var i = 0; i < chars.length; i++) {
+    if (chars[i] === '"') {
+      if (!inQuote) {
+        chars[i] = '«';
+        inQuote = true;
+      } else {
+        chars[i] = '»';
+        inQuote = false;
+      }
+    }
+  }
+  s = chars.join('');
+
+  // 5. Non-breaking spaces (\u00A0) after short Russian prepositions/conjunctions
+  // so they don't dangle alone at line ends
+  var preps = 'в|на|с|и|к|о|по|из|от|у|за|под|над|для|не|но|что|как|а|то|же|ли';
+  var rePrep = new RegExp('(^|[\\s«\"\\(\\[])(' + preps + ')\\s+', 'gi');
+  s = s.replace(rePrep, '$1$2\u00A0');
+
+  return s;
+}
+
 /* ---------- After Effects ---------- */
 
 function ae_comp() {
@@ -344,6 +384,19 @@ function ae_anim(d) {
           } else {
             clearPropKeys(posProp);
           }
+          try {
+            var srcDocR = ae_srctext(layer);
+            if (srcDocR.canSetExpression && srcDocR.expressionEnabled) srcDocR.expression = '';
+          } catch (eR) {}
+          try {
+            var fxR = layer.property('ADBE Effect Parade');
+            if (fxR) {
+              for (var fxi = fxR.numProperties; fxi >= 1; fxi--) {
+                var mn = fxR.property(fxi).matchName;
+                if (mn === 'ADBE Gaussian Blur 2' || mn === 'ADBE Fast Blur') fxR.property(fxi).remove();
+              }
+            }
+          } catch (eFx) {}
         } else if (d.anim === 'bounce') {
           clearPropKeys(scaleProp);
           var t1 = t0, t2 = t0 + 4 * fd, t3 = t0 + 7 * fd;
@@ -419,6 +472,41 @@ function ae_anim(d) {
           }
         } else if (d.anim === 'wiggle') {
           posProp.expression = 'wiggle(2, 6);';
+        } else if (d.anim === 'typewriter') {
+          var speed = (d.speed && Number(d.speed) > 0) ? Number(d.speed) : 24;
+          var srcDocProp = ae_srctext(layer);
+          if (srcDocProp.canSetExpression) {
+            srcDocProp.expression = 'var s = value;\n' +
+              'var t = Math.max(0, time - inPoint);\n' +
+              'var len = Math.min(s.length, Math.floor(t * ' + speed + '));\n' +
+              'var cur = (Math.floor(time * 3.5) % 2 === 0) ? "|" : "";\n' +
+              's.substr(0, len) + (len < s.length ? cur : "");';
+          }
+        } else if (d.anim === 'blur') {
+          clearPropKeys(opacityProp);
+          var tEndBlur = t0 + 8 * fd;
+          opacityProp.setValueAtTime(t0, 0);
+          opacityProp.setValueAtTime(tEndBlur, 100);
+          var kOpB1 = opacityProp.nearestKeyIndex(t0);
+          var kOpB2 = opacityProp.nearestKeyIndex(tEndBlur);
+          opacityProp.setInterpolationTypeAtKey(kOpB1, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+          opacityProp.setInterpolationTypeAtKey(kOpB2, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+          try {
+            var fxGroup = layer.property('ADBE Effect Parade');
+            if (fxGroup) {
+              var blurEffect = fxGroup.addProperty('ADBE Gaussian Blur 2') || fxGroup.addProperty('ADBE Fast Blur');
+              if (blurEffect) {
+                var bProp = blurEffect.property(1);
+                clearPropKeys(bProp);
+                bProp.setValueAtTime(t0, 40);
+                bProp.setValueAtTime(tEndBlur, 0);
+                var kB1 = bProp.nearestKeyIndex(t0);
+                var kB2 = bProp.nearestKeyIndex(tEndBlur);
+                bProp.setInterpolationTypeAtKey(kB1, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+                bProp.setInterpolationTypeAtKey(kB2, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+              }
+            }
+          } catch (ebf) {}
         }
         done++;
       } catch (err) {
@@ -501,6 +589,128 @@ function ae_case(d) {
     app.endUndoGroup();
   }
   return { ok: true, code: 'cased', layers: touched, skipped: skipped, scope: t.scope };
+}
+
+function ae_box(d) {
+  var comp = ae_comp(), t = ae_targets(comp), i, textLayer, shapeLayer, count = 0, skipped = 0;
+  if (!t.layers.length) throw new Error('NO_TEXT_LAYERS');
+  app.beginUndoGroup('SubPanel: Auto Box');
+  try {
+    var padX = (d && d.padX) ? Number(d.padX) : 40;
+    var padY = (d && d.padY) ? Number(d.padY) : 22;
+    var roundness = (d && d.roundness !== undefined) ? Number(d.roundness) : 14;
+    var boxColor = (d && d.boxColor) ? d.boxColor : '#000000';
+    var boxOpacity = (d && d.boxOpacity !== undefined) ? Number(d.boxOpacity) : 85;
+
+    for (i = 0; i < t.layers.length; i++) {
+      textLayer = t.layers[i];
+      if (textLayer.locked) { skipped++; continue; }
+
+      try {
+        shapeLayer = comp.layers.addShape();
+        shapeLayer.name = 'Box: ' + textLayer.name;
+        shapeLayer.moveAfter(textLayer);
+        shapeLayer.inPoint = textLayer.inPoint;
+        shapeLayer.outPoint = textLayer.outPoint;
+
+        var contents = shapeLayer.property("ADBE Root Vectors Group");
+        var group = contents.addProperty("ADBE Vector Group");
+        group.name = "Box";
+        var groupContents = group.property("ADBE Vectors Group");
+
+        var rect = groupContents.addProperty("ADBE Vector Shape - Rect");
+        try { rect.property("ADBE Vector Rect Roundness").setValue(roundness); } catch (ernd) {}
+
+        rect.property("ADBE Vector Rect Size").expression =
+          'var t = thisComp.layer("' + textLayer.name.replace(/"/g, '\\"') + '");\n' +
+          'var r = t.sourceRectAtTime(time, false);\n' +
+          '[' + padX + ' + r.width, ' + padY + ' + r.height];';
+
+        var fill = groupContents.addProperty("ADBE Vector Graphic - Fill");
+        fill.property("ADBE Vector Fill Color").setValue(sp_rgb(boxColor));
+        fill.property("ADBE Vector Fill Opacity").setValue(boxOpacity);
+
+        shapeLayer.parent = textLayer;
+        shapeLayer.property("Transform").property("Position").expression =
+          'var r = thisLayer.parent.sourceRectAtTime(time, false);\n' +
+          '[r.left + r.width/2, r.top + r.height/2];';
+
+        count++;
+      } catch (eb) { skipped++; }
+    }
+    return { ok: true, code: 'box_created', count: count, skipped: skipped, scope: t.scope };
+  } finally {
+    app.endUndoGroup();
+  }
+}
+
+function ae_center_anchor(d) {
+  var comp = ae_comp(), t = ae_targets(comp), i, layer, count = 0, skipped = 0;
+  if (!t.layers.length) throw new Error('NO_TEXT_LAYERS');
+  app.beginUndoGroup('SubPanel: Center Anchor');
+  try {
+    for (i = 0; i < t.layers.length; i++) {
+      layer = t.layers[i];
+      if (layer.locked) { skipped++; continue; }
+      try {
+        var ap = layer.property("Transform").property("Anchor Point");
+        var pos = layer.property("Transform").property("Position");
+
+        if (d && d.live) {
+          ap.expression = 'var r = sourceRectAtTime(); [r.left + r.width/2, r.top + r.height/2];';
+        } else {
+          var r = layer.sourceRectAtTime(0, false);
+          var newAp = [r.left + r.width / 2, r.top + r.height / 2];
+          var oldAp = ap.value;
+          var deltaX = newAp[0] - oldAp[0];
+          var deltaY = newAp[1] - oldAp[1];
+
+          if (ap.numKeys === 0) ap.setValue(newAp);
+          if (pos.numKeys === 0) {
+            var oldPos = pos.value;
+            pos.setValue([oldPos[0] + deltaX, oldPos[1] + deltaY, oldPos[2] || 0]);
+          }
+        }
+        count++;
+      } catch (e) { skipped++; }
+    }
+    return { ok: true, code: 'anchor_centered', count: count, skipped: skipped, scope: t.scope };
+  } finally {
+    app.endUndoGroup();
+  }
+}
+
+function ae_purge() {
+  try {
+    app.purge(PurgeTarget.ALL_CACHES);
+    return { ok: true, code: 'purged' };
+  } catch (e) {
+    return { ok: false, code: 'FAIL', raw: String(e.message || e) };
+  }
+}
+
+function ae_typo(d) {
+  var comp = ae_comp(), t = ae_targets(comp), i, touched = 0, skipped = 0;
+  if (!t.layers.length) throw new Error('NO_TEXT_LAYERS');
+  app.beginUndoGroup('SubPanel: typographer');
+  try {
+    for (i = 0; i < t.layers.length; i++) {
+      if (t.layers[i].locked) { skipped++; continue; }
+      try {
+        var n = ae_each_doc(ae_srctext(t.layers[i]), function (td) {
+          var before = td.text;
+          var after = sp_typo(before);
+          if (after === before) return false;
+          td.text = after;
+          return true;
+        });
+        if (n) touched++;
+      } catch (e) { skipped++; }
+    }
+  } finally {
+    app.endUndoGroup();
+  }
+  return { ok: true, code: 'typo_applied', layers: touched, skipped: skipped, scope: t.scope };
 }
 
 function ae_fonts() {
@@ -664,6 +874,22 @@ function pr_case(d) {
   return { ok: true, code: 'cased', clips: touched, total: comps.length, scope: t.scope };
 }
 
+function pr_typo(d) {
+  var t = pr_targets(), comps = t.comps, i, p, before, after, touched = 0;
+  if (!comps.length) throw new Error('NO_GRAPHICS');
+  for (i = 0; i < comps.length; i++) {
+    p = pr_text_param(comps[i]);
+    if (!p) continue;
+    before = String(p.obj.textEditValue);
+    after = sp_typo(before);
+    if (after === before) continue;
+    pr_set_text(p, after);
+    p.prop.setValue(sp_str(p.obj), true);
+    touched++;
+  }
+  return { ok: true, code: 'typo_applied', clips: touched, total: comps.length, scope: t.scope };
+}
+
 function pr_apply(d) {
   var t = pr_targets(), comps = t.comps, i, p, changed, touched = 0;
   if (!comps.length) throw new Error('NO_GRAPHICS');
@@ -755,6 +981,14 @@ function SP_run(action, payload) {
       r = ae_strip(d);
     } else if (SP_HOST === 'AE' && action === 'anim') {
       r = ae_anim(d);
+    } else if (SP_HOST === 'AE' && action === 'box') {
+      r = ae_box(d);
+    } else if (SP_HOST === 'AE' && action === 'anchor') {
+      r = ae_center_anchor(d);
+    } else if (SP_HOST === 'AE' && action === 'purge') {
+      r = ae_purge(d);
+    } else if (SP_HOST === 'AE' && action === 'typo') {
+      r = ae_typo(d);
     } else if (SP_HOST === 'AE' && action === 'censor') {
       r = ae_censor(d);
     } else if (SP_HOST === 'AE' && action === 'wrap') {
@@ -765,6 +999,8 @@ function SP_run(action, payload) {
       r = pr_apply(d);
     } else if (SP_HOST === 'PR' && action === 'strip') {
       r = pr_strip(d);
+    } else if (SP_HOST === 'PR' && action === 'typo') {
+      r = pr_typo(d);
     } else if (SP_HOST === 'PR' && action === 'censor') {
       r = pr_censor(d);
     } else if (SP_HOST === 'PR' && action === 'wrap') {

@@ -15,10 +15,17 @@ using Microsoft.Win32;
 
 namespace PrLauncher
 {
+    public enum AppKind
+    {
+        PR,
+        AE
+    }
+
     public class ProjectItem
     {
         public string Name { get; set; }
         public string Path { get; set; }
+        public AppKind Kind { get; set; }
         public DateTime LastModified { get; set; }
         public long SizeBytes { get; set; }
         public bool Exists { get; set; }
@@ -64,6 +71,18 @@ namespace PrLauncher
         public static Color TextSecondary = Color.FromArgb(148, 163, 184); // #94a3b8
         public static Color TextDim = Color.FromArgb(100, 116, 139);     // #64748b
 
+        // Premiere Colors
+        public static Color PrBgTop = Color.FromArgb(59, 24, 95);
+        public static Color PrBgBottom = Color.FromArgb(36, 17, 66);
+        public static Color PrBorder = Color.FromArgb(107, 33, 168);
+        public static Color PrText = Color.FromArgb(233, 213, 255);
+
+        // After Effects Colors
+        public static Color AeBgTop = Color.FromArgb(15, 30, 68);
+        public static Color AeBgBottom = Color.FromArgb(10, 18, 44);
+        public static Color AeBorder = Color.FromArgb(29, 78, 216);
+        public static Color AeText = Color.FromArgb(191, 219, 254);
+
         public static Color Accent = Color.FromArgb(139, 92, 246);       // #8b5cf6
         public static Color AccentHover = Color.FromArgb(167, 139, 250); // #a78bfa
         public static Color AccentDark = Color.FromArgb(109, 40, 217);   // #6d28d9
@@ -100,7 +119,7 @@ namespace PrLauncher
         public static PointF[] CreateStarPoints(float cx, float cy, float rOuter, float rInner)
         {
             PointF[] pts = new PointF[10];
-            double angle = -Math.PI / 2.0; // start at top point
+            double angle = -Math.PI / 2.0;
             double step = Math.PI / 5.0;
 
             for (int i = 0; i < 10; i++)
@@ -113,6 +132,153 @@ namespace PrLauncher
                 angle += step;
             }
             return pts;
+        }
+    }
+
+    public class FilterTabBar : Control
+    {
+        public enum FilterMode { All, PR, AE }
+        private FilterMode currentMode = FilterMode.All;
+        private int countAll = 0;
+        private int countPr = 0;
+        private int countAe = 0;
+        private int hoverTab = -1;
+
+        public event EventHandler FilterChanged;
+
+        public FilterTabBar()
+        {
+            this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                          ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            this.DoubleBuffered = true;
+            this.Height = 36;
+            this.BackColor = UITheme.Bg;
+            this.Cursor = Cursors.Hand;
+        }
+
+        public FilterMode Mode
+        {
+            get { return currentMode; }
+            set
+            {
+                if (currentMode != value)
+                {
+                    currentMode = value;
+                    this.Invalidate();
+                    if (FilterChanged != null) FilterChanged(this, EventArgs.Empty);
+                }
+            }
+        }
+
+        public void SetCounts(int all, int pr, int ae)
+        {
+            countAll = all;
+            countPr = pr;
+            countAe = ae;
+            this.Invalidate();
+        }
+
+        private Rectangle[] GetTabRects()
+        {
+            int h = this.Height - 4;
+            int x = 0;
+            var r1 = new Rectangle(x, 2, 85, h);
+            x += r1.Width + 6;
+            var r2 = new Rectangle(x, 2, 140, h);
+            x += r2.Width + 6;
+            var r3 = new Rectangle(x, 2, 140, h);
+            return new Rectangle[] { r1, r2, r3 };
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var rects = GetTabRects();
+            int hov = -1;
+            for (int i = 0; i < rects.Length; i++)
+            {
+                if (rects[i].Contains(e.Location)) { hov = i; break; }
+            }
+            if (hov != hoverTab)
+            {
+                hoverTab = hov;
+                this.Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (hoverTab != -1)
+            {
+                hoverTab = -1;
+                this.Invalidate();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            var rects = GetTabRects();
+            if (rects[0].Contains(e.Location)) Mode = FilterMode.All;
+            else if (rects[1].Contains(e.Location)) Mode = FilterMode.PR;
+            else if (rects[2].Contains(e.Location)) Mode = FilterMode.AE;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            var rects = GetTabRects();
+            string[] titles = new string[]
+            {
+                string.Format("Все ({0})", countAll),
+                string.Format("Premiere Pro ({0})", countPr),
+                string.Format("After Effects ({0})", countAe)
+            };
+
+            for (int i = 0; i < 3; i++)
+            {
+                bool isSel = (i == 0 && currentMode == FilterMode.All) ||
+                             (i == 1 && currentMode == FilterMode.PR) ||
+                             (i == 2 && currentMode == FilterMode.AE);
+                bool isHov = (i == hoverTab);
+                var r = rects[i];
+
+                Color bg = isSel ? UITheme.CardSelected : (isHov ? UITheme.CardHover : UITheme.CardBg);
+                Color border = isSel ? UITheme.Accent : (isHov ? UITheme.CardHoverBorder : UITheme.CardBorder);
+                Color fg = isSel ? UITheme.TextPrimary : (isHov ? UITheme.TextPrimary : UITheme.TextSecondary);
+
+                using (var path = UITheme.CreateRoundedRectangle(r, 6))
+                {
+                    using (var brush = new SolidBrush(bg))
+                        g.FillPath(brush, path);
+                    using (var pen = new Pen(border, isSel ? 1.5f : 1f))
+                        g.DrawPath(pen, path);
+                }
+
+                // App Mini dot for Pr and Ae
+                if (i == 1)
+                {
+                    using (var b = new SolidBrush(Color.FromArgb(168, 85, 247)))
+                        g.FillEllipse(b, r.X + 10, r.Y + r.Height / 2 - 3, 7, 7);
+                }
+                else if (i == 2)
+                {
+                    using (var b = new SolidBrush(Color.FromArgb(59, 130, 246)))
+                        g.FillEllipse(b, r.X + 10, r.Y + r.Height / 2 - 3, 7, 7);
+                }
+
+                using (var font = new Font("Segoe UI", 9f, isSel ? FontStyle.Bold : FontStyle.Regular))
+                using (var brush = new SolidBrush(fg))
+                using (var sf = new StringFormat { Alignment = (i == 0 ? StringAlignment.Center : StringAlignment.Near), LineAlignment = StringAlignment.Center })
+                {
+                    Rectangle textRect = i == 0 ? r : new Rectangle(r.X + 22, r.Y, r.Width - 24, r.Height);
+                    g.DrawString(titles[i], font, brush, textRect, sf);
+                }
+            }
         }
     }
 
@@ -139,6 +305,7 @@ namespace PrLauncher
         public event EventHandler<ProjectItem> ProjectLaunched;
         public event EventHandler<ProjectItem> PinToggled;
         public event EventHandler<ProjectItem> ProjectRemoveRequested;
+        public event EventHandler<ProjectItem> AutoSaveRecoveryRequested;
         public event EventHandler SelectionChanged;
 
         public ProjectCardList()
@@ -363,7 +530,6 @@ namespace PrLauncher
                 }
                 else if (e.X >= this.ClientSize.Width - scrollBarWidth - 8)
                 {
-                    // Click track to jump
                     if (e.Y < thumb.Y) scrollValue = Math.Max(0, scrollValue - this.ClientSize.Height);
                     else scrollValue = Math.Min(maxScroll, scrollValue + this.ClientSize.Height);
                     this.Invalidate();
@@ -462,8 +628,15 @@ namespace PrLauncher
             var menu = new ContextMenuStrip();
             menu.Renderer = new DarkMenuRenderer();
 
-            var itmOpen = menu.Items.Add("▶  Открыть в Premiere Pro");
+            string appTitle = (p.Kind == AppKind.AE) ? "After Effects" : "Premiere Pro";
+            var itmOpen = menu.Items.Add(string.Format("▶  Открыть в {0}", appTitle));
             itmOpen.Click += (s, e) => { if (ProjectLaunched != null) ProjectLaunched(this, p); };
+
+            var itmAutoSave = menu.Items.Add("⏱  Восстановить из автосохранения...");
+            itmAutoSave.Click += (s, e) =>
+            {
+                if (AutoSaveRecoveryRequested != null) AutoSaveRecoveryRequested(this, p);
+            };
 
             var itmFolder = menu.Items.Add("📂  Показать в Проводнике");
             itmFolder.Click += (s, e) =>
@@ -573,7 +746,7 @@ namespace PrLauncher
                     g.FillPath(brush, path);
             }
 
-            // 3. Pin Star Button (crisp vector polygon star!)
+            // 3. Pin Star Button
             var starRect = GetStarBounds(r);
             if (starHover)
             {
@@ -608,23 +781,30 @@ namespace PrLauncher
                 }
             }
 
-            // 4. Project Icon Badge (38x38 square with rounded corners)
+            // 4. Project Icon Badge (Pr or Ae)
             Rectangle iconRect = new Rectangle(r.X + 44, r.Y + 15, 38, 38);
             using (var path = UITheme.CreateRoundedRectangle(iconRect, 7))
             {
-                using (var lgb = new LinearGradientBrush(iconRect, Color.FromArgb(59, 24, 95), Color.FromArgb(36, 17, 66), 45f))
+                Color topBg = (p.Kind == AppKind.AE) ? UITheme.AeBgTop : UITheme.PrBgTop;
+                Color botBg = (p.Kind == AppKind.AE) ? UITheme.AeBgBottom : UITheme.PrBgBottom;
+                Color icoBorder = (p.Kind == AppKind.AE) ? UITheme.AeBorder : UITheme.PrBorder;
+                Color icoFg = (p.Kind == AppKind.AE) ? UITheme.AeText : UITheme.PrText;
+                string icoText = (p.Kind == AppKind.AE) ? "Ae" : "Pr";
+
+                using (var lgb = new LinearGradientBrush(iconRect, topBg, botBg, 45f))
                     g.FillPath(lgb, path);
-                using (var pen = new Pen(Color.FromArgb(107, 33, 168), 1f))
+                using (var pen = new Pen(icoBorder, 1f))
                     g.DrawPath(pen, path);
-            }
-            using (var font = new Font("Segoe UI", 11.5f, FontStyle.Bold))
-            using (var brush = new SolidBrush(Color.FromArgb(233, 213, 255)))
-            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            {
-                g.DrawString("Pr", font, brush, iconRect, sf);
+
+                using (var font = new Font("Segoe UI", 11.5f, FontStyle.Bold))
+                using (var brush = new SolidBrush(icoFg))
+                using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString(icoText, font, brush, iconRect, sf);
+                }
             }
 
-            // 5. Project Name & Path (Spacious two-row typography!)
+            // 5. Project Name & Path
             int textX = r.X + 94;
             int textMaxW = r.Width - 340;
             if (textMaxW < 120) textMaxW = 120;
@@ -648,7 +828,7 @@ namespace PrLauncher
             // 6. Right Side: Status Badge, Date, Size, Quick Launch
             int rightX = r.Right - 16;
 
-            // Status Pill Badge (Available / Missing)
+            // Status Pill Badge
             string statusText = p.Exists ? "● Доступен" : "✕ Не найден";
             Color stFg = p.Exists ? UITheme.Green : UITheme.Red;
             Color stBg = p.Exists ? UITheme.GreenBg : UITheme.RedBg;
@@ -675,7 +855,7 @@ namespace PrLauncher
                 g.DrawString(statusText, font, brush, stRect, sf);
             }
 
-            // Date (to the left of status badge)
+            // Date
             using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
             {
                 string dtStr = p.FormattedDate;
@@ -732,7 +912,6 @@ namespace PrLauncher
             Rectangle r = this.ClientRectangle;
             int cy = r.Height / 2 - 30;
 
-            // Draw crisp vector search icon
             using (var pen = new Pen(Color.FromArgb(55, 65, 81), 3f))
             {
                 g.DrawEllipse(pen, r.Width / 2 - 16, cy - 35, 24, 24);
@@ -750,7 +929,7 @@ namespace PrLauncher
             using (var brush = new SolidBrush(UITheme.TextDim))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center })
             {
-                g.DrawString("Попробуйте изменить поисковый запрос или создайте новый проект кнопкой «+ Новый проект»", font, brush, new Rectangle(0, cy + 38, r.Width, 22), sf);
+                g.DrawString("Перетащите .prproj или .aep в окно, или создайте проект кнопкой «+ Проект со структурой»", font, brush, new Rectangle(0, cy + 38, r.Width, 22), sf);
             }
         }
     }
@@ -812,7 +991,7 @@ namespace PrLauncher
         public ModernSearchBox()
         {
             this.DoubleBuffered = true;
-            this.Size = new Size(380, 36);
+            this.Size = new Size(340, 36);
             this.BackColor = UITheme.CardBg;
             this.Cursor = Cursors.IBeam;
 
@@ -828,7 +1007,7 @@ namespace PrLauncher
 
             lblPlaceholder = new Label
             {
-                Text = "Поиск по названию или пути проекта...",
+                Text = "Поиск по названию или пути...",
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
                 ForeColor = UITheme.TextDim,
                 BackColor = UITheme.CardBg,
@@ -857,7 +1036,7 @@ namespace PrLauncher
             base.OnHandleCreated(e);
             try
             {
-                SendMessage(innerText.Handle, EM_SETCUEBANNER, 1, "Поиск по названию или пути проекта...");
+                SendMessage(innerText.Handle, EM_SETCUEBANNER, 1, "Поиск по названию или пути...");
             }
             catch { }
         }
@@ -921,14 +1100,14 @@ namespace PrLauncher
                     g.DrawPath(pen, path);
             }
 
-            // Crisp vector magnifying glass
+            // Magnifying glass
             using (var pen = new Pen(isFocused ? UITheme.Accent : UITheme.TextDim, 1.6f))
             {
                 g.DrawEllipse(pen, 11, 11, 11, 11);
                 g.DrawLine(pen, 20, 20, 25, 25);
             }
 
-            // Draw Clear Button (✕)
+            // Clear Button
             if (innerText.Text.Length > 0)
             {
                 Rectangle clearRect = new Rectangle(this.Width - 26, 8, 18, 18);
@@ -939,6 +1118,547 @@ namespace PrLauncher
                     g.DrawString("✕", font, brush, clearRect, sf);
                 }
             }
+        }
+    }
+
+    public class AutoSaveRecoveryDialog : Form
+    {
+        private ProjectItem project;
+        private List<FileInfo> autoSaveFiles = new List<FileInfo>();
+        private ListBox lstFiles;
+        private Label lblHeader;
+        private Label lblSelectedInfo;
+        private Button btnLaunch;
+        private Button btnRestoreOriginal;
+        private Button btnShowFolder;
+        private Button btnClose;
+
+        public AutoSaveRecoveryDialog(ProjectItem p)
+        {
+            this.project = p;
+            this.Text = "Восстановление из автосохранения — " + p.Name;
+            this.Size = new Size(680, 460);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = UITheme.Bg;
+            this.ForeColor = UITheme.TextPrimary;
+            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+
+            InitializeUI();
+            ScanAutoSaves();
+        }
+
+        private void InitializeUI()
+        {
+            lblHeader = new Label
+            {
+                Text = string.Format("Автосохранения для проекта «{0}»:", project.Name),
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+                ForeColor = UITheme.TextPrimary,
+                Location = new Point(20, 16),
+                AutoSize = true
+            };
+
+            lstFiles = new ListBox
+            {
+                Location = new Point(20, 48),
+                Size = new Size(624, 250),
+                BackColor = UITheme.CardBg,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5f),
+                ItemHeight = 22
+            };
+            lstFiles.SelectedIndexChanged += LstFiles_SelectedIndexChanged;
+            lstFiles.DoubleClick += (s, e) => LaunchSelectedAutoSave();
+
+            lblSelectedInfo = new Label
+            {
+                Location = new Point(20, 310),
+                Size = new Size(624, 40),
+                ForeColor = UITheme.TextSecondary,
+                Font = new Font("Segoe UI", 8.8f)
+            };
+
+            btnLaunch = MainForm.CreateCustomButton("▶ Открыть копию", 140, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnLaunch.Location = new Point(20, 365);
+            btnLaunch.Height = 34;
+            btnLaunch.Enabled = false;
+            btnLaunch.Click += (s, e) => LaunchSelectedAutoSave();
+
+            btnRestoreOriginal = MainForm.CreateCustomButton("🔄 Заменить оригинал", 160, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnRestoreOriginal.Location = new Point(170, 365);
+            btnRestoreOriginal.Height = 34;
+            btnRestoreOriginal.Enabled = false;
+            btnRestoreOriginal.Click += (s, e) => RestoreOriginal();
+
+            btnShowFolder = MainForm.CreateCustomButton("📂 В папке", 100, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnShowFolder.Location = new Point(340, 365);
+            btnShowFolder.Height = 34;
+            btnShowFolder.Enabled = false;
+            btnShowFolder.Click += (s, e) => ShowFolder();
+
+            btnClose = MainForm.CreateCustomButton("Закрыть", 100, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
+            btnClose.Location = new Point(544, 365);
+            btnClose.Height = 34;
+            btnClose.Click += (s, e) => this.Close();
+
+            this.Controls.Add(lblHeader);
+            this.Controls.Add(lstFiles);
+            this.Controls.Add(lblSelectedInfo);
+            this.Controls.Add(btnLaunch);
+            this.Controls.Add(btnRestoreOriginal);
+            this.Controls.Add(btnShowFolder);
+            this.Controls.Add(btnClose);
+        }
+
+        private void ScanAutoSaves()
+        {
+            autoSaveFiles.Clear();
+            lstFiles.Items.Clear();
+
+            string projDir = Path.GetDirectoryName(project.Path);
+            string baseName = Path.GetFileNameWithoutExtension(project.Path);
+            string ext = (project.Kind == AppKind.AE) ? "*.aep" : "*.prproj";
+
+            var searchDirs = new List<string>();
+
+            // 1. Project subfolder Auto-Save
+            string subDir = (project.Kind == AppKind.AE) ? "Adobe After Effects Auto-Save" : "Adobe Premiere Pro Auto-Save";
+            if (!string.IsNullOrEmpty(projDir))
+            {
+                searchDirs.Add(Path.Combine(projDir, subDir));
+                searchDirs.Add(projDir);
+            }
+
+            // 2. Documents Auto-Save
+            string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (project.Kind == AppKind.AE)
+            {
+                searchDirs.Add(Path.Combine(docs, "Adobe", "After Effects"));
+            }
+            else
+            {
+                string prDocs = Path.Combine(docs, "Adobe", "Premiere Pro");
+                if (Directory.Exists(prDocs))
+                {
+                    try
+                    {
+                        var autoSub = Directory.GetDirectories(prDocs, "Adobe Premiere Pro Auto-Save", SearchOption.AllDirectories);
+                        searchDirs.AddRange(autoSub);
+                    }
+                    catch { }
+                }
+            }
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var dir in searchDirs)
+            {
+                if (Directory.Exists(dir))
+                {
+                    try
+                    {
+                        var files = Directory.GetFiles(dir, ext, SearchOption.TopDirectoryOnly);
+                        foreach (var f in files)
+                        {
+                            string fname = Path.GetFileName(f);
+                            if (string.Equals(f, project.Path, StringComparison.OrdinalIgnoreCase)) continue;
+
+                            if (fname.StartsWith(baseName, StringComparison.OrdinalIgnoreCase) || fname.Contains(baseName))
+                            {
+                                if (seen.Add(f))
+                                {
+                                    autoSaveFiles.Add(new FileInfo(f));
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            autoSaveFiles.Sort((a, b) => b.LastWriteTime.CompareTo(a.LastWriteTime));
+
+            if (autoSaveFiles.Count == 0)
+            {
+                lstFiles.Items.Add("Автосохранения не найдены для данного проекта.");
+                lblSelectedInfo.Text = "Проверены папки:\n" + string.Join("\n", searchDirs.ToArray());
+            }
+            else
+            {
+                foreach (var fi in autoSaveFiles)
+                {
+                    string sz = fi.Length < 1024 * 1024 ? string.Format("{0:F1} КБ", fi.Length / 1024.0) : string.Format("{0:F1} МБ", fi.Length / (1024.0 * 1024.0));
+                    lstFiles.Items.Add(string.Format("{0:yyyy-MM-dd HH:mm:ss}  |  {1}  |  {2}", fi.LastWriteTime, sz, fi.Name));
+                }
+                lstFiles.SelectedIndex = 0;
+            }
+        }
+
+        private void LstFiles_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            int idx = lstFiles.SelectedIndex;
+            if (idx >= 0 && idx < autoSaveFiles.Count)
+            {
+                var fi = autoSaveFiles[idx];
+                lblSelectedInfo.Text = "Полный путь:\n" + fi.FullName;
+                btnLaunch.Enabled = true;
+                btnRestoreOriginal.Enabled = true;
+                btnShowFolder.Enabled = true;
+            }
+            else
+            {
+                lblSelectedInfo.Text = "";
+                btnLaunch.Enabled = false;
+                btnRestoreOriginal.Enabled = false;
+                btnShowFolder.Enabled = false;
+            }
+        }
+
+        private void LaunchSelectedAutoSave()
+        {
+            int idx = lstFiles.SelectedIndex;
+            if (idx >= 0 && idx < autoSaveFiles.Count)
+            {
+                var fi = autoSaveFiles[idx];
+                MainForm.GlobalInstance.LaunchSpecificFile(fi.FullName, project.Kind);
+                this.Close();
+            }
+        }
+
+        private void RestoreOriginal()
+        {
+            int idx = lstFiles.SelectedIndex;
+            if (idx >= 0 && idx < autoSaveFiles.Count)
+            {
+                var fi = autoSaveFiles[idx];
+                var dr = MessageBox.Show(string.Format("Текущий проект «{0}» будет перезаписан выбранной копией от {1:dd.MM.yyyy HH:mm:ss}.\nСоздать резервную копию оригинала перед заменой?", project.Name, fi.LastWriteTime),
+                    "Подтверждение восстановления", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                if (dr == DialogResult.Cancel) return;
+
+                try
+                {
+                    if (dr == DialogResult.Yes && File.Exists(project.Path))
+                    {
+                        string backupPath = project.Path + ".backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                        File.Copy(project.Path, backupPath, true);
+                    }
+
+                    File.Copy(fi.FullName, project.Path, true);
+                    MessageBox.Show("Оригинал проекта успешно восстановлен из автосохранения!", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MainForm.GlobalInstance.LaunchSpecificFile(project.Path, project.Kind);
+                    this.Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка при восстановлении:\n" + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void ShowFolder()
+        {
+            int idx = lstFiles.SelectedIndex;
+            if (idx >= 0 && idx < autoSaveFiles.Count)
+            {
+                try
+                {
+                    Process.Start("explorer.exe", string.Format("/select,\"{0}\"", autoSaveFiles[idx].FullName));
+                }
+                catch { }
+            }
+        }
+    }
+
+    public class NewProjectDialog : Form
+    {
+        private TextBox txtName;
+        private TextBox txtFolder;
+        private Button btnBrowse;
+        private RadioButton rbPr;
+        private RadioButton rbAe;
+        private RadioButton rbBoth;
+        private CheckBox chkStructure;
+        private CheckBox chkOpenAfter;
+        private Button btnCreate;
+        private Button btnCancel;
+
+        public NewProjectDialog(string defaultFolder)
+        {
+            this.Text = "Создать проект со структурой";
+            this.Size = new Size(540, 360);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = UITheme.Bg;
+            this.ForeColor = UITheme.TextPrimary;
+            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+
+            InitializeUI(defaultFolder);
+        }
+
+        private void InitializeUI(string defaultFolder)
+        {
+            var lbl1 = new Label { Text = "Название проекта:", Location = new Point(24, 20), AutoSize = true, ForeColor = UITheme.TextSecondary };
+            txtName = new TextBox
+            {
+                Location = new Point(24, 44),
+                Width = 475,
+                BackColor = UITheme.CardBg,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 10f),
+                Text = "Новый_Проект_" + DateTime.Now.ToString("ddMMyy")
+            };
+
+            var lbl2 = new Label { Text = "Папка для размещения:", Location = new Point(24, 82), AutoSize = true, ForeColor = UITheme.TextSecondary };
+            txtFolder = new TextBox
+            {
+                Location = new Point(24, 106),
+                Width = 370,
+                BackColor = UITheme.CardBg,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5f),
+                Text = string.IsNullOrEmpty(defaultFolder) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : defaultFolder
+            };
+
+            btnBrowse = MainForm.CreateCustomButton("Обзор...", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnBrowse.Location = new Point(404, 104);
+            btnBrowse.Height = 27;
+            btnBrowse.Click += (s, e) =>
+            {
+                using (var fbd = new FolderBrowserDialog())
+                {
+                    fbd.SelectedPath = txtFolder.Text;
+                    if (fbd.ShowDialog() == DialogResult.OK)
+                        txtFolder.Text = fbd.SelectedPath;
+                }
+            };
+
+            var lbl3 = new Label { Text = "Тип проекта:", Location = new Point(24, 146), AutoSize = true, ForeColor = UITheme.TextSecondary };
+
+            rbPr = new RadioButton { Text = "Premiere Pro (.prproj)", Location = new Point(24, 172), AutoSize = true, Checked = true, ForeColor = UITheme.TextPrimary };
+            rbAe = new RadioButton { Text = "After Effects (.aep)", Location = new Point(200, 172), AutoSize = true, ForeColor = UITheme.TextPrimary };
+            rbBoth = new RadioButton { Text = "Оба (Pr + Ae)", Location = new Point(360, 172), AutoSize = true, ForeColor = UITheme.TextPrimary };
+
+            chkStructure = new CheckBox
+            {
+                Text = "Создать структуру папок (01_RAW, 02_AUDIO, 03_ASSETS, 04_PROJECT, 05_EXPORTS)",
+                Location = new Point(24, 212),
+                AutoSize = true,
+                Checked = true,
+                ForeColor = UITheme.TextSecondary
+            };
+
+            chkOpenAfter = new CheckBox
+            {
+                Text = "Открыть проект сразу после создания",
+                Location = new Point(24, 238),
+                AutoSize = true,
+                Checked = true,
+                ForeColor = UITheme.TextSecondary
+            };
+
+            btnCreate = MainForm.CreateCustomButton("Создать проект", 140, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnCreate.Location = new Point(235, 275);
+            btnCreate.Height = 34;
+            btnCreate.Click += BtnCreate_Click;
+
+            btnCancel = MainForm.CreateCustomButton("Отмена", 100, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
+            btnCancel.Location = new Point(385, 275);
+            btnCancel.Height = 34;
+            btnCancel.Click += (s, e) => this.Close();
+
+            this.Controls.Add(lbl1);
+            this.Controls.Add(txtName);
+            this.Controls.Add(lbl2);
+            this.Controls.Add(txtFolder);
+            this.Controls.Add(btnBrowse);
+            this.Controls.Add(lbl3);
+            this.Controls.Add(rbPr);
+            this.Controls.Add(rbAe);
+            this.Controls.Add(rbBoth);
+            this.Controls.Add(chkStructure);
+            this.Controls.Add(chkOpenAfter);
+            this.Controls.Add(btnCreate);
+            this.Controls.Add(btnCancel);
+        }
+
+        private void BtnCreate_Click(object sender, EventArgs e)
+        {
+            string name = txtName.Text.Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                MessageBox.Show("Введите название проекта.", "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string baseDir = txtFolder.Text.Trim();
+            if (!Directory.Exists(baseDir))
+            {
+                try { Directory.CreateDirectory(baseDir); }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Не удалось создать папку:\n" + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            try
+            {
+                string projectDir = Path.Combine(baseDir, name);
+                if (!Directory.Exists(projectDir)) Directory.CreateDirectory(projectDir);
+
+                string filesFolder = projectDir;
+                if (chkStructure.Checked)
+                {
+                    Directory.CreateDirectory(Path.Combine(projectDir, "01_RAW"));
+                    Directory.CreateDirectory(Path.Combine(projectDir, "02_AUDIO"));
+                    Directory.CreateDirectory(Path.Combine(projectDir, "03_ASSETS"));
+                    filesFolder = Path.Combine(projectDir, "04_PROJECT");
+                    Directory.CreateDirectory(filesFolder);
+                    Directory.CreateDirectory(Path.Combine(projectDir, "05_EXPORTS"));
+                }
+
+                string prFile = null;
+                string aeFile = null;
+
+                if (rbPr.Checked || rbBoth.Checked)
+                {
+                    prFile = Path.Combine(filesFolder, name + ".prproj");
+                    MainForm.CreateBlankPremiereProject(prFile);
+                }
+
+                if (rbAe.Checked || rbBoth.Checked)
+                {
+                    aeFile = Path.Combine(filesFolder, name + ".aep");
+                    // Create an empty template or touch file
+                    File.WriteAllBytes(aeFile, new byte[0]);
+                }
+
+                MainForm.GlobalInstance.RefreshProjects();
+
+                if (chkOpenAfter.Checked)
+                {
+                    if (prFile != null && File.Exists(prFile))
+                        MainForm.GlobalInstance.LaunchSpecificFile(prFile, AppKind.PR);
+                    else if (aeFile != null && File.Exists(aeFile))
+                        MainForm.GlobalInstance.LaunchSpecificFile(aeFile, AppKind.AE);
+                }
+                else
+                {
+                    MessageBox.Show(string.Format("Проект «{0}» успешно создан в папке:\n{1}", name, projectDir), "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
+                this.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка создания структуры:\n" + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+
+    public class ExeConfigDialog : Form
+    {
+        private TextBox txtPr;
+        private TextBox txtAe;
+        private Button btnBrowsePr;
+        private Button btnBrowseAe;
+        private Button btnSave;
+        private Button btnCancel;
+
+        public ExeConfigDialog(string prPath, string aePath)
+        {
+            this.Text = "Настройки исполняемых файлов Adobe (.exe)";
+            this.Size = new Size(620, 260);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = UITheme.Bg;
+            this.ForeColor = UITheme.TextPrimary;
+            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+
+            InitializeUI(prPath, aePath);
+        }
+
+        private void InitializeUI(string prPath, string aePath)
+        {
+            var lbl1 = new Label { Text = "Adobe Premiere Pro (.exe):", Location = new Point(24, 20), AutoSize = true, ForeColor = UITheme.TextSecondary };
+            txtPr = new TextBox
+            {
+                Location = new Point(24, 44),
+                Width = 450,
+                BackColor = UITheme.CardBg,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5f),
+                Text = prPath ?? ""
+            };
+            btnBrowsePr = MainForm.CreateCustomButton("Обзор...", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnBrowsePr.Location = new Point(484, 42);
+            btnBrowsePr.Height = 27;
+            btnBrowsePr.Click += (s, e) =>
+            {
+                using (var dlg = new OpenFileDialog())
+                {
+                    dlg.Filter = "Adobe Premiere Pro.exe|Adobe Premiere Pro.exe|Исполняемые файлы (*.exe)|*.exe";
+                    if (dlg.ShowDialog() == DialogResult.OK) txtPr.Text = dlg.FileName;
+                }
+            };
+
+            var lbl2 = new Label { Text = "Adobe After Effects (AfterFX.exe):", Location = new Point(24, 88), AutoSize = true, ForeColor = UITheme.TextSecondary };
+            txtAe = new TextBox
+            {
+                Location = new Point(24, 112),
+                Width = 450,
+                BackColor = UITheme.CardBg,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5f),
+                Text = aePath ?? ""
+            };
+            btnBrowseAe = MainForm.CreateCustomButton("Обзор...", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnBrowseAe.Location = new Point(484, 110);
+            btnBrowseAe.Height = 27;
+            btnBrowseAe.Click += (s, e) =>
+            {
+                using (var dlg = new OpenFileDialog())
+                {
+                    dlg.Filter = "AfterFX.exe|AfterFX.exe|Исполняемые файлы (*.exe)|*.exe";
+                    if (dlg.ShowDialog() == DialogResult.OK) txtAe.Text = dlg.FileName;
+                }
+            };
+
+            btnSave = MainForm.CreateCustomButton("Сохранить", 120, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnSave.Location = new Point(334, 170);
+            btnSave.Height = 34;
+            btnSave.Click += (s, e) =>
+            {
+                MainForm.GlobalInstance.UpdateExePaths(txtPr.Text.Trim(), txtAe.Text.Trim());
+                this.Close();
+            };
+
+            btnCancel = MainForm.CreateCustomButton("Отмена", 100, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
+            btnCancel.Location = new Point(464, 170);
+            btnCancel.Height = 34;
+            btnCancel.Click += (s, e) => this.Close();
+
+            this.Controls.Add(lbl1);
+            this.Controls.Add(txtPr);
+            this.Controls.Add(btnBrowsePr);
+            this.Controls.Add(lbl2);
+            this.Controls.Add(txtAe);
+            this.Controls.Add(btnBrowseAe);
+            this.Controls.Add(btnSave);
+            this.Controls.Add(btnCancel);
         }
     }
 
@@ -955,18 +1675,24 @@ namespace PrLauncher
         private const int DWMWA_CAPTION_COLOR = 35;
         private const int DWMWA_TEXT_COLOR = 36;
 
+        public static MainForm GlobalInstance { get; private set; }
+
         private List<ProjectItem> allProjects = new List<ProjectItem>();
         private List<ProjectItem> filteredProjects = new List<ProjectItem>();
         private HashSet<string> pinnedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private string premiereExePath = "";
+        private string afterEffectsExePath = "";
         private string configFilePath;
         private string activePrefsPath = "";
 
         // UI Controls
         private Panel headerPanel;
-        private Label lblPremiereStatus;
-        private Button btnBrowsePr;
+        private Label lblAppStatus;
+        private Button btnConfigExe;
+
+        private Panel filterPanel;
+        private FilterTabBar filterTabBar;
 
         private Panel searchPanel;
         private ModernSearchBox searchBox;
@@ -983,6 +1709,7 @@ namespace PrLauncher
 
         public MainForm()
         {
+            GlobalInstance = this;
             try { SetProcessDPIAware(); } catch { }
 
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -990,13 +1717,69 @@ namespace PrLauncher
             if (!Directory.Exists(cfgDir)) Directory.CreateDirectory(cfgDir);
             configFilePath = Path.Combine(cfgDir, "config.json");
 
+            this.AllowDrop = true;
+            this.DragEnter += MainForm_DragEnter;
+            this.DragDrop += MainForm_DragDrop;
+
             InitializeComponent();
             SetAppIcon();
             this.Shown += (s, e) => this.ActiveControl = cardList;
             LoadConfig();
-            DetectPremiere();
+            DetectAdobeApps();
             RefreshProjects();
             CheckStartupTweak();
+        }
+
+        private void MainForm_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                bool valid = false;
+                foreach (var f in files)
+                {
+                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                    if (ext == ".prproj" || ext == ".aep") { valid = true; break; }
+                }
+                e.Effect = valid ? DragDropEffects.Copy : DragDropEffects.None;
+            }
+        }
+
+        private void MainForm_DragDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                int added = 0;
+                foreach (var f in files)
+                {
+                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                    if (ext == ".prproj" || ext == ".aep")
+                    {
+                        var fi = new FileInfo(f);
+                        var item = new ProjectItem
+                        {
+                            Name = Path.GetFileNameWithoutExtension(f),
+                            Path = f,
+                            Kind = ext == ".aep" ? AppKind.AE : AppKind.PR,
+                            LastModified = fi.LastWriteTime,
+                            SizeBytes = fi.Length,
+                            Exists = true,
+                            IsPinned = true
+                        };
+                        pinnedPaths.Add(f);
+                        allProjects.RemoveAll(x => string.Equals(x.Path, f, StringComparison.OrdinalIgnoreCase));
+                        allProjects.Insert(0, item);
+                        added++;
+                    }
+                }
+                if (added > 0)
+                {
+                    SaveConfig();
+                    SortProjects();
+                    ApplyFilter();
+                }
+            }
         }
 
         private void SetAppIcon()
@@ -1010,16 +1793,16 @@ namespace PrLauncher
                     Rectangle r = new Rectangle(0, 0, 31, 31);
                     using (var path = UITheme.CreateRoundedRectangle(r, 6))
                     {
-                        using (var lgb = new LinearGradientBrush(r, Color.FromArgb(67, 24, 110), Color.FromArgb(36, 17, 66), 45f))
+                        using (var lgb = new LinearGradientBrush(r, Color.FromArgb(67, 24, 110), Color.FromArgb(15, 30, 68), 45f))
                             g.FillPath(lgb, path);
                         using (var pen = new Pen(Color.FromArgb(168, 85, 247), 1.5f))
                             g.DrawPath(pen, path);
                     }
-                    using (var font = new Font("Segoe UI", 12f, FontStyle.Bold))
-                    using (var brush = new SolidBrush(Color.FromArgb(245, 208, 254)))
+                    using (var font = new Font("Segoe UI", 10f, FontStyle.Bold))
+                    using (var brush = new SolidBrush(Color.White))
                     using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                     {
-                        g.DrawString("Pr", font, brush, r, sf);
+                        g.DrawString("Pr|Ae", font, brush, r, sf);
                     }
                     IntPtr hIcon = bmp.GetHicon();
                     this.Icon = Icon.FromHandle(hIcon);
@@ -1036,7 +1819,7 @@ namespace PrLauncher
                 int dark = 1;
                 DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
                 DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref dark, sizeof(int));
-                int titleBg = 0x001A1412; // COLORREF: 0x00BBGGRR -> #12141a
+                int titleBg = 0x001A1412;
                 DwmSetWindowAttribute(this.Handle, DWMWA_CAPTION_COLOR, ref titleBg, sizeof(int));
                 int titleFg = 0x00F8FAFC;
                 DwmSetWindowAttribute(this.Handle, DWMWA_TEXT_COLOR, ref titleFg, sizeof(int));
@@ -1046,9 +1829,9 @@ namespace PrLauncher
 
         private void InitializeComponent()
         {
-            this.Text = "PrLauncher — Быстрый запуск Premiere Pro";
-            this.Size = new Size(940, 660);
-            this.MinimumSize = new Size(740, 500);
+            this.Text = "Adobe Studio Launcher — Premiere Pro & After Effects";
+            this.Size = new Size(960, 700);
+            this.MinimumSize = new Size(760, 520);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = UITheme.Bg;
             this.ForeColor = UITheme.TextPrimary;
@@ -1066,24 +1849,48 @@ namespace PrLauncher
             headerPanel.Paint += HeaderPanel_Paint;
             headerPanel.Resize += (s, e) => LayoutHeaderControls();
 
-            lblPremiereStatus = new Label
+            lblAppStatus = new Label
             {
-                Text = "● Поиск Premiere Pro...",
+                Text = "● Поиск Adobe CC...",
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold),
                 ForeColor = UITheme.Green,
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
 
-            btnBrowsePr = CreateStyledButton("Сменить .exe", 105, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
-            btnBrowsePr.Height = 32;
-            btnBrowsePr.Click += BtnBrowsePr_Click;
+            btnConfigExe = CreateCustomButton("Настройки .exe...", 130, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
+            btnConfigExe.Height = 32;
+            btnConfigExe.Click += (s, e) =>
+            {
+                using (var dlg = new ExeConfigDialog(premiereExePath, afterEffectsExePath))
+                {
+                    dlg.ShowDialog(this);
+                }
+            };
 
-            headerPanel.Controls.Add(lblPremiereStatus);
-            headerPanel.Controls.Add(btnBrowsePr);
+            headerPanel.Controls.Add(lblAppStatus);
+            headerPanel.Controls.Add(btnConfigExe);
             LayoutHeaderControls();
 
-            // 2. Search & Action Panel (Height: 52px)
+            // 2. Filter Tab Bar Panel (Height: 42px)
+            filterPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                BackColor = UITheme.Bg,
+                Padding = new Padding(20, 2, 20, 4)
+            };
+
+            filterTabBar = new FilterTabBar
+            {
+                Location = new Point(20, 2),
+                Width = 400,
+                Height = 36
+            };
+            filterTabBar.FilterChanged += (s, e) => ApplyFilter();
+            filterPanel.Controls.Add(filterTabBar);
+
+            // 3. Search & Action Panel (Height: 52px)
             searchPanel = new Panel
             {
                 Dock = DockStyle.Top,
@@ -1095,22 +1902,32 @@ namespace PrLauncher
             searchBox = new ModernSearchBox
             {
                 Location = new Point(20, 6),
-                Width = 380,
+                Width = 340,
                 Height = 36
             };
             searchBox.TextChangedEvent += (s, e) => ApplyFilter();
 
-            btnNewProject = CreateStyledButton("+ Новый проект", 145, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
-            btnNewProject.Location = new Point(415, 6);
+            btnNewProject = CreateCustomButton("+ Проект со структурой", 180, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnNewProject.Location = new Point(375, 6);
             btnNewProject.Height = 36;
-            btnNewProject.Click += BtnNewProject_Click;
+            btnNewProject.Click += (s, e) =>
+            {
+                string defFolder = allProjects.Count > 0 && !string.IsNullOrEmpty(allProjects[0].Path)
+                    ? Path.GetDirectoryName(allProjects[0].Path)
+                    : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-            btnCleanCache = CreateStyledButton("Очистить кэш", 130, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
-            btnCleanCache.Location = new Point(570, 6);
+                using (var dlg = new NewProjectDialog(defFolder))
+                {
+                    dlg.ShowDialog(this);
+                }
+            };
+
+            btnCleanCache = CreateCustomButton("Кэш: 0 МБ", 130, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnCleanCache.Location = new Point(568, 6);
             btnCleanCache.Height = 36;
             btnCleanCache.Click += BtnCleanCache_Click;
 
-            btnRefresh = CreateStyledButton("Обновить", 105, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnRefresh = CreateCustomButton("Обновить", 100, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
             btnRefresh.Location = new Point(710, 6);
             btnRefresh.Height = 36;
             btnRefresh.Click += (s, e) => RefreshProjects();
@@ -1120,16 +1937,23 @@ namespace PrLauncher
             searchPanel.Controls.Add(btnCleanCache);
             searchPanel.Controls.Add(btnRefresh);
 
-            // 3. Project Card List
+            // 4. Project Card List
             cardList = new ProjectCardList
             {
                 Dock = DockStyle.Fill
             };
-            cardList.ProjectLaunched += (s, p) => LaunchProject(p.Path);
+            cardList.ProjectLaunched += (s, p) => LaunchProject(p);
             cardList.PinToggled += (s, p) => TogglePin(p);
             cardList.ProjectRemoveRequested += (s, p) => RemoveFromRecent(p);
+            cardList.AutoSaveRecoveryRequested += (s, p) =>
+            {
+                using (var dlg = new AutoSaveRecoveryDialog(p))
+                {
+                    dlg.ShowDialog(this);
+                }
+            };
 
-            // 4. Footer Panel (Height: 48px)
+            // 5. Footer Panel (Height: 48px)
             footerPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
@@ -1145,7 +1969,7 @@ namespace PrLauncher
 
             chkDisableHome = new CheckBox
             {
-                Text = "Отключить начальный экран в Premiere Pro",
+                Text = "Отключить медленный начальный экран",
                 AutoSize = true,
                 ForeColor = UITheme.TextSecondary,
                 Location = new Point(20, 14),
@@ -1159,31 +1983,38 @@ namespace PrLauncher
                 AutoSize = true,
                 ForeColor = UITheme.TextDim,
                 Font = new Font("Segoe UI", 9f),
-                Location = new Point(370, 15)
+                Location = new Point(340, 15)
             };
 
-            btnLaunchEmpty = CreateStyledButton("▶  Открыть Premiere Pro", 195, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnLaunchEmpty = CreateCustomButton("▶ Запустить Premiere Pro", 195, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
             btnLaunchEmpty.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnLaunchEmpty.Location = new Point(720, 8);
+            btnLaunchEmpty.Location = new Point(735, 8);
             btnLaunchEmpty.Height = 32;
-            btnLaunchEmpty.Click += (s, e) => LaunchProject(null);
+            btnLaunchEmpty.Click += (s, e) =>
+            {
+                if (filterTabBar.Mode == FilterTabBar.FilterMode.AE)
+                    LaunchEmptyAE();
+                else
+                    LaunchEmptyPR();
+            };
 
             footerPanel.Controls.Add(chkDisableHome);
             footerPanel.Controls.Add(lblStats);
             footerPanel.Controls.Add(btnLaunchEmpty);
 
-            // Add all to Form
+            // Add all controls to Form
             this.Controls.Add(cardList);
             this.Controls.Add(searchPanel);
+            this.Controls.Add(filterPanel);
             this.Controls.Add(headerPanel);
             this.Controls.Add(footerPanel);
         }
 
         private void LayoutHeaderControls()
         {
-            if (btnBrowsePr == null || lblPremiereStatus == null) return;
-            btnBrowsePr.Location = new Point(headerPanel.Width - btnBrowsePr.Width - 20, 22);
-            lblPremiereStatus.Location = new Point(btnBrowsePr.Left - lblPremiereStatus.Width - 16, 28);
+            if (btnConfigExe == null || lblAppStatus == null) return;
+            btnConfigExe.Location = new Point(headerPanel.Width - btnConfigExe.Width - 20, 22);
+            lblAppStatus.Location = new Point(btnConfigExe.Left - lblAppStatus.Width - 16, 28);
         }
 
         private void HeaderPanel_Paint(object sender, PaintEventArgs e)
@@ -1191,32 +2022,47 @@ namespace PrLauncher
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 1. Logo Badge (42x42 square)
-            Rectangle logoRect = new Rectangle(20, 18, 42, 42);
-            using (var path = UITheme.CreateRoundedRectangle(logoRect, 8))
+            // 1. Dual Logo Badges (Pr and Ae)
+            Rectangle prRect = new Rectangle(20, 18, 36, 42);
+            using (var path = UITheme.CreateRoundedRectangle(prRect, 6))
             {
-                using (var lgb = new LinearGradientBrush(logoRect, Color.FromArgb(67, 24, 110), Color.FromArgb(36, 17, 66), 45f))
+                using (var lgb = new LinearGradientBrush(prRect, UITheme.PrBgTop, UITheme.PrBgBottom, 45f))
                     g.FillPath(lgb, path);
-                using (var pen = new Pen(Color.FromArgb(139, 92, 246), 1.5f))
+                using (var pen = new Pen(UITheme.PrBorder, 1.2f))
                     g.DrawPath(pen, path);
             }
-            using (var font = new Font("Segoe UI", 13.5f, FontStyle.Bold))
-            using (var brush = new SolidBrush(Color.FromArgb(245, 208, 254)))
+            using (var font = new Font("Segoe UI", 12f, FontStyle.Bold))
+            using (var brush = new SolidBrush(UITheme.PrText))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
-                g.DrawString("Pr", font, brush, logoRect, sf);
+                g.DrawString("Pr", font, brush, prRect, sf);
+            }
+
+            Rectangle aeRect = new Rectangle(58, 18, 36, 42);
+            using (var path = UITheme.CreateRoundedRectangle(aeRect, 6))
+            {
+                using (var lgb = new LinearGradientBrush(aeRect, UITheme.AeBgTop, UITheme.AeBgBottom, 45f))
+                    g.FillPath(lgb, path);
+                using (var pen = new Pen(UITheme.AeBorder, 1.2f))
+                    g.DrawPath(pen, path);
+            }
+            using (var font = new Font("Segoe UI", 12f, FontStyle.Bold))
+            using (var brush = new SolidBrush(UITheme.AeText))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.DrawString("Ae", font, brush, aeRect, sf);
             }
 
             // 2. Title & Version Tag
-            int titleX = 72;
-            using (var font = new Font("Segoe UI", 16f, FontStyle.Bold))
+            int titleX = 106;
+            using (var font = new Font("Segoe UI", 15f, FontStyle.Bold))
             using (var brush = new SolidBrush(UITheme.TextPrimary))
             {
-                g.DrawString("PrLauncher", font, brush, titleX, 15);
+                g.DrawString("Adobe Studio Launcher", font, brush, titleX, 15);
             }
 
             // Version Pill
-            Rectangle verRect = new Rectangle(titleX + 130, 22, 46, 19);
+            Rectangle verRect = new Rectangle(titleX + 225, 20, 48, 19);
             using (var path = UITheme.CreateRoundedRectangle(verRect, 6))
             {
                 using (var brush = new SolidBrush(Color.FromArgb(46, 16, 101)))
@@ -1228,18 +2074,18 @@ namespace PrLauncher
             using (var brush = new SolidBrush(Color.FromArgb(192, 132, 252)))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
-                g.DrawString("v1.3.0", font, brush, verRect, sf);
+                g.DrawString("v1.4.0", font, brush, verRect, sf);
             }
 
             // 3. Subtitle
             using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
             using (var brush = new SolidBrush(UITheme.TextSecondary))
             {
-                g.DrawString("Мгновенный запуск проектов в обход медленного начального экрана", font, brush, titleX, 44);
+                g.DrawString("Быстрый запуск Premiere Pro и After Effects без начального экрана", font, brush, titleX, 44);
             }
         }
 
-        private Button CreateStyledButton(string text, int width, Color bg, Color fg, Color border, Color hoverBg)
+        public static Button CreateCustomButton(string text, int width, Color bg, Color fg, Color border, Color hoverBg)
         {
             var btn = new Button
             {
@@ -1270,15 +2116,33 @@ namespace PrLauncher
             return btn;
         }
 
-        private void DetectPremiere()
+        public void UpdateExePaths(string pr, string ae)
         {
-            if (!string.IsNullOrEmpty(premiereExePath) && File.Exists(premiereExePath))
+            premiereExePath = pr;
+            afterEffectsExePath = ae;
+            SaveConfig();
+            UpdateAppStatus();
+        }
+
+        private void DetectAdobeApps()
+        {
+            // Premiere Detection
+            if (string.IsNullOrEmpty(premiereExePath) || !File.Exists(premiereExePath))
             {
-                UpdatePrStatus();
-                return;
+                premiereExePath = FindPremiereExe();
             }
 
-            // Registry Search
+            // After Effects Detection
+            if (string.IsNullOrEmpty(afterEffectsExePath) || !File.Exists(afterEffectsExePath))
+            {
+                afterEffectsExePath = FindAfterEffectsExe();
+            }
+
+            UpdateAppStatus();
+        }
+
+        private string FindPremiereExe()
+        {
             try
             {
                 using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Adobe\Premiere Pro"))
@@ -1288,7 +2152,6 @@ namespace PrLauncher
                         var subKeyNames = key.GetSubKeyNames();
                         Array.Sort(subKeyNames);
                         Array.Reverse(subKeyNames);
-
                         foreach (var name in subKeyNames)
                         {
                             using (var subKey = key.OpenSubKey(name))
@@ -1299,12 +2162,7 @@ namespace PrLauncher
                                     if (!string.IsNullOrEmpty(dir))
                                     {
                                         string exe = Path.Combine(dir, "Adobe Premiere Pro.exe");
-                                        if (File.Exists(exe))
-                                        {
-                                            premiereExePath = exe;
-                                            UpdatePrStatus();
-                                            return;
-                                        }
+                                        if (File.Exists(exe)) return exe;
                                     }
                                 }
                             }
@@ -1314,70 +2172,114 @@ namespace PrLauncher
             }
             catch { }
 
-            // Common Program Files Paths
             string[] versions = new string[] { "2026", "2025", "2024", "2023", "2022", "2021", "2020", "CC" };
             string[] drives = new string[] { "C:", "D:", "E:" };
-
             foreach (var d in drives)
             {
                 foreach (var v in versions)
                 {
                     string candidate = string.Format(@"{0}\Program Files\Adobe\Adobe Premiere Pro {1}\Adobe Premiere Pro.exe", d, v);
-                    if (File.Exists(candidate))
-                    {
-                        premiereExePath = candidate;
-                        UpdatePrStatus();
-                        return;
-                    }
+                    if (File.Exists(candidate)) return candidate;
                 }
             }
-
-            lblPremiereStatus.Text = "✕ Premiere Pro не найден";
-            lblPremiereStatus.ForeColor = UITheme.Red;
-            LayoutHeaderControls();
+            return "";
         }
 
-        private void UpdatePrStatus()
+        private string FindAfterEffectsExe()
         {
             try
             {
-                var vi = FileVersionInfo.GetVersionInfo(premiereExePath);
-                string verName = "Premiere Pro " + vi.ProductVersion;
-                if (premiereExePath.Contains("2026")) verName = "Premiere Pro 2026";
-                else if (premiereExePath.Contains("2025")) verName = "Premiere Pro 2025";
-                else if (premiereExePath.Contains("2024")) verName = "Premiere Pro 2024";
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Adobe\After Effects"))
+                {
+                    if (key != null)
+                    {
+                        var subKeyNames = key.GetSubKeyNames();
+                        Array.Sort(subKeyNames);
+                        Array.Reverse(subKeyNames);
+                        foreach (var name in subKeyNames)
+                        {
+                            using (var subKey = key.OpenSubKey(name))
+                            {
+                                if (subKey != null)
+                                {
+                                    string dir = subKey.GetValue("ApplicationPath") as string;
+                                    if (!string.IsNullOrEmpty(dir))
+                                    {
+                                        string exe = Path.Combine(dir, "Support Files", "AfterFX.exe");
+                                        if (File.Exists(exe)) return exe;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
 
-                lblPremiereStatus.Text = "● " + verName + " найден";
-                lblPremiereStatus.ForeColor = UITheme.Green;
-                SaveConfig();
-            }
-            catch
+            string[] versions = new string[] { "2026", "2025", "2024", "2023", "2022", "2021", "2020", "CC" };
+            string[] drives = new string[] { "C:", "D:", "E:" };
+            foreach (var d in drives)
             {
-                lblPremiereStatus.Text = "● Premiere Pro найден";
-                lblPremiereStatus.ForeColor = UITheme.Green;
+                foreach (var v in versions)
+                {
+                    string candidate = string.Format(@"{0}\Program Files\Adobe\Adobe After Effects {1}\Support Files\AfterFX.exe", d, v);
+                    if (File.Exists(candidate)) return candidate;
+                }
             }
+            return "";
+        }
+
+        private void UpdateAppStatus()
+        {
+            bool hasPr = !string.IsNullOrEmpty(premiereExePath) && File.Exists(premiereExePath);
+            bool hasAe = !string.IsNullOrEmpty(afterEffectsExePath) && File.Exists(afterEffectsExePath);
+
+            string prVer = "Pr";
+            if (hasPr)
+            {
+                if (premiereExePath.Contains("2026")) prVer = "Pr 2026";
+                else if (premiereExePath.Contains("2025")) prVer = "Pr 2025";
+                else if (premiereExePath.Contains("2024")) prVer = "Pr 2024";
+            }
+
+            string aeVer = "Ae";
+            if (hasAe)
+            {
+                if (afterEffectsExePath.Contains("2026")) aeVer = "Ae 2026";
+                else if (afterEffectsExePath.Contains("2025")) aeVer = "Ae 2025";
+                else if (afterEffectsExePath.Contains("2024")) aeVer = "Ae 2024";
+            }
+
+            if (hasPr && hasAe)
+            {
+                lblAppStatus.Text = string.Format("● {0}  ● {1}", prVer, aeVer);
+                lblAppStatus.ForeColor = UITheme.Green;
+            }
+            else if (hasPr)
+            {
+                lblAppStatus.Text = string.Format("● {0}  ✕ Ae не найден", prVer);
+                lblAppStatus.ForeColor = Color.FromArgb(234, 179, 8);
+            }
+            else if (hasAe)
+            {
+                lblAppStatus.Text = string.Format("✕ Pr не найден  ● {0}", aeVer);
+                lblAppStatus.ForeColor = Color.FromArgb(234, 179, 8);
+            }
+            else
+            {
+                lblAppStatus.Text = "✕ Приложения Adobe не найдены";
+                lblAppStatus.ForeColor = UITheme.Red;
+            }
+
             LayoutHeaderControls();
         }
 
-        private void BtnBrowsePr_Click(object sender, EventArgs e)
-        {
-            using (var dlg = new OpenFileDialog())
-            {
-                dlg.Filter = "Adobe Premiere Pro|Adobe Premiere Pro.exe|Исполняемые файлы (*.exe)|*.exe";
-                dlg.Title = "Выберите Adobe Premiere Pro.exe";
-                if (dlg.ShowDialog() == DialogResult.OK)
-                {
-                    premiereExePath = dlg.FileName;
-                    UpdatePrStatus();
-                }
-            }
-        }
-
-        private void RefreshProjects()
+        public void RefreshProjects()
         {
             allProjects.Clear();
             var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // 1. Premiere Pro Preferences MRU
             string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             string prDocs = Path.Combine(docs, "Adobe", "Premiere Pro");
 
@@ -1393,40 +2295,147 @@ namespace PrLauncher
 
                     foreach (var pref in prefFiles)
                     {
-                        ParsePrefsMru(pref, seenPaths);
+                        ParsePremierePrefsMru(pref, seenPaths);
                     }
                 }
                 catch { }
-            }
 
-            if (Directory.Exists(prDocs))
-            {
                 try
                 {
                     var directProjects = Directory.GetFiles(prDocs, "*.prproj", SearchOption.TopDirectoryOnly);
                     foreach (var dp in directProjects)
                     {
-                        if (seenPaths.Add(dp))
-                        {
-                            var fi = new FileInfo(dp);
-                            allProjects.Add(new ProjectItem
-                            {
-                                Name = Path.GetFileNameWithoutExtension(dp),
-                                Path = dp,
-                                LastModified = fi.LastWriteTime,
-                                SizeBytes = fi.Length,
-                                Exists = true,
-                                IsPinned = pinnedPaths.Contains(dp)
-                            });
-                        }
+                        AddProjectItem(dp, AppKind.PR, seenPaths);
                     }
                 }
                 catch { }
             }
 
+            // 2. After Effects Preferences & Recent
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string aeAppData = Path.Combine(appData, "Adobe", "After Effects");
+            if (Directory.Exists(aeAppData))
+            {
+                try
+                {
+                    var aePrefs = Directory.GetFiles(aeAppData, "*Prefs*.txt", SearchOption.AllDirectories);
+                    foreach (var ap in aePrefs)
+                    {
+                        ParseAfterEffectsPrefs(ap, seenPaths);
+                    }
+                    var aeRusPrefs = Directory.GetFiles(aeAppData, "*Установки*.txt", SearchOption.AllDirectories);
+                    foreach (var ap in aeRusPrefs)
+                    {
+                        ParseAfterEffectsPrefs(ap, seenPaths);
+                    }
+                }
+                catch { }
+            }
+
+            // 3. Scan Common User Render/Projects Folders (e.g. E:\render)
+            string[] commonFolders = new string[] { @"E:\render", @"D:\render", Path.Combine(docs, "Adobe") };
+            foreach (var cf in commonFolders)
+            {
+                if (Directory.Exists(cf))
+                {
+                    try
+                    {
+                        var prFiles = Directory.GetFiles(cf, "*.prproj", SearchOption.TopDirectoryOnly);
+                        foreach (var f in prFiles) AddProjectItem(f, AppKind.PR, seenPaths);
+
+                        var aeFiles = Directory.GetFiles(cf, "*.aep", SearchOption.TopDirectoryOnly);
+                        foreach (var f in aeFiles) AddProjectItem(f, AppKind.AE, seenPaths);
+                    }
+                    catch { }
+                }
+            }
+
+            // 4. Also keep pinned projects even if not in MRU
+            foreach (var p in pinnedPaths)
+            {
+                if (!seenPaths.Contains(p) && File.Exists(p))
+                {
+                    string ext = Path.GetExtension(p).ToLowerInvariant();
+                    AddProjectItem(p, ext == ".aep" ? AppKind.AE : AppKind.PR, seenPaths);
+                }
+            }
+
             SortProjects();
             ApplyFilter();
             UpdateCacheSizeStats();
+        }
+
+        private void AddProjectItem(string path, AppKind kind, HashSet<string> seenPaths)
+        {
+            if (string.IsNullOrEmpty(path) || !seenPaths.Add(path)) return;
+
+            bool exists = File.Exists(path);
+            DateTime dt = DateTime.MinValue;
+            long size = 0;
+
+            if (exists)
+            {
+                try
+                {
+                    var fi = new FileInfo(path);
+                    dt = fi.LastWriteTime;
+                    size = fi.Length;
+                }
+                catch { }
+            }
+
+            allProjects.Add(new ProjectItem
+            {
+                Name = Path.GetFileNameWithoutExtension(path),
+                Path = path,
+                Kind = kind,
+                LastModified = dt == DateTime.MinValue ? DateTime.Now : dt,
+                SizeBytes = size,
+                Exists = exists,
+                IsPinned = pinnedPaths.Contains(path)
+            });
+        }
+
+        private void ParsePremierePrefsMru(string prefsPath, HashSet<string> seenPaths)
+        {
+            try
+            {
+                string text = File.ReadAllText(prefsPath);
+                var matches = Regex.Matches(text, @"<BE\.Prefs\.MRU\.Document\.(\d+)>(.*?)</BE\.Prefs\.MRU\.Document\.\1>");
+
+                foreach (Match m in matches)
+                {
+                    string cleanPath = m.Groups[2].Value.Trim();
+                    if (cleanPath.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+                        cleanPath = @"\\" + cleanPath.Substring(8);
+                    else if (cleanPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+                        cleanPath = cleanPath.Substring(4);
+
+                    AddProjectItem(cleanPath, AppKind.PR, seenPaths);
+                }
+            }
+            catch { }
+        }
+
+        private void ParseAfterEffectsPrefs(string prefsPath, HashSet<string> seenPaths)
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(prefsPath);
+                foreach (var line in lines)
+                {
+                    if (line.Contains(".aep") || line.Contains(".AEP"))
+                    {
+                        var m = Regex.Match(line, @"""(.*?[.]aep)""", RegexOptions.IgnoreCase);
+                        if (m.Success)
+                        {
+                            string p = m.Groups[1].Value.Trim().Replace(@"\\", @"\");
+                            if (File.Exists(p)) AddProjectItem(p, AppKind.AE, seenPaths);
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         private void SortProjects()
@@ -1438,64 +2447,36 @@ namespace PrLauncher
             });
         }
 
-        private void ParsePrefsMru(string prefsPath, HashSet<string> seenPaths)
-        {
-            try
-            {
-                string text = File.ReadAllText(prefsPath);
-                var matches = Regex.Matches(text, @"<BE\.Prefs\.MRU\.Document\.(\d+)>(.*?)</BE\.Prefs\.MRU\.Document\.\1>");
-
-                foreach (Match m in matches)
-                {
-                    string rawPath = m.Groups[2].Value.Trim();
-                    string cleanPath = rawPath;
-                    if (cleanPath.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
-                        cleanPath = @"\\" + cleanPath.Substring(8);
-                    else if (cleanPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
-                        cleanPath = cleanPath.Substring(4);
-
-                    if (!string.IsNullOrEmpty(cleanPath) && seenPaths.Add(cleanPath))
-                    {
-                        bool exists = File.Exists(cleanPath);
-                        DateTime dt = DateTime.MinValue;
-                        long size = 0;
-
-                        if (exists)
-                        {
-                            try
-                            {
-                                var fi = new FileInfo(cleanPath);
-                                dt = fi.LastWriteTime;
-                                size = fi.Length;
-                            }
-                            catch { }
-                        }
-
-                        allProjects.Add(new ProjectItem
-                        {
-                            Name = Path.GetFileNameWithoutExtension(cleanPath),
-                            Path = cleanPath,
-                            LastModified = dt == DateTime.MinValue ? DateTime.Now : dt,
-                            SizeBytes = size,
-                            Exists = exists,
-                            IsPinned = pinnedPaths.Contains(cleanPath)
-                        });
-                    }
-                }
-            }
-            catch { }
-        }
-
         private void ApplyFilter()
         {
             string q = searchBox.SearchText.Trim().ToLowerInvariant();
+            var mode = filterTabBar.Mode;
+
             filteredProjects = allProjects.FindAll(p =>
-                string.IsNullOrEmpty(q) ||
-                p.Name.ToLowerInvariant().Contains(q) ||
-                p.Path.ToLowerInvariant().Contains(q));
+            {
+                if (mode == FilterTabBar.FilterMode.PR && p.Kind != AppKind.PR) return false;
+                if (mode == FilterTabBar.FilterMode.AE && p.Kind != AppKind.AE) return false;
+
+                if (!string.IsNullOrEmpty(q))
+                {
+                    if (!p.Name.ToLowerInvariant().Contains(q) && !p.Path.ToLowerInvariant().Contains(q))
+                        return false;
+                }
+                return true;
+            });
+
+            int totalAll = allProjects.Count;
+            int totalPr = allProjects.FindAll(p => p.Kind == AppKind.PR).Count;
+            int totalAe = allProjects.FindAll(p => p.Kind == AppKind.AE).Count;
+            filterTabBar.SetCounts(totalAll, totalPr, totalAe);
 
             cardList.Items = filteredProjects;
             lblStats.Text = string.Format("Проектов: {0} из {1}", filteredProjects.Count, allProjects.Count);
+
+            if (mode == FilterTabBar.FilterMode.AE)
+                btnLaunchEmpty.Text = "▶  Запустить After Effects";
+            else
+                btnLaunchEmpty.Text = "▶  Запустить Premiere Pro";
         }
 
         private void TogglePin(ProjectItem p)
@@ -1517,15 +2498,24 @@ namespace PrLauncher
             ApplyFilter();
         }
 
-        private void LaunchProject(string projectPath)
+        public void LaunchProject(ProjectItem p)
         {
-            if (string.IsNullOrEmpty(premiereExePath) || !File.Exists(premiereExePath))
+            LaunchSpecificFile(p.Path, p.Kind);
+        }
+
+        public void LaunchSpecificFile(string filePath, AppKind kind)
+        {
+            string exe = (kind == AppKind.AE) ? afterEffectsExePath : premiereExePath;
+            string appName = (kind == AppKind.AE) ? "After Effects" : "Premiere Pro";
+
+            if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
             {
-                DetectPremiere();
-                if (string.IsNullOrEmpty(premiereExePath) || !File.Exists(premiereExePath))
+                DetectAdobeApps();
+                exe = (kind == AppKind.AE) ? afterEffectsExePath : premiereExePath;
+                if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
                 {
-                    MessageBox.Show("Не удалось найти Adobe Premiere Pro.exe.\nПожалуйста, укажите путь кнопкой «Сменить .exe».", "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    BtnBrowsePr_Click(this, EventArgs.Empty);
+                    MessageBox.Show(string.Format("Не удалось найти исполняемый файл {0}.\nПожалуйста, укажите путь в «Настройки .exe...».", appName),
+                        "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
@@ -1533,55 +2523,39 @@ namespace PrLauncher
             try
             {
                 var psi = new ProcessStartInfo();
-                psi.FileName = premiereExePath;
-                if (!string.IsNullOrEmpty(projectPath))
+                psi.FileName = exe;
+                if (!string.IsNullOrEmpty(filePath))
                 {
-                    if (!File.Exists(projectPath))
+                    if (!File.Exists(filePath))
                     {
-                        var dr = MessageBox.Show(string.Format("Файл проекта не найден по пути:\n{0}\n\nОткрыть просто Premiere Pro?", projectPath), "Файл отсутствует", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                        var dr = MessageBox.Show(string.Format("Файл проекта не найден:\n{0}\n\nОткрыть пустое приложение {1}?", filePath, appName),
+                            "Файл отсутствует", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                         if (dr != DialogResult.Yes) return;
                     }
                     else
                     {
-                        psi.Arguments = string.Format("\"{0}\"", projectPath);
+                        psi.Arguments = string.Format("\"{0}\"", filePath);
                     }
                 }
-
                 Process.Start(psi);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка запуска Premiere Pro:\n" + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(string.Format("Ошибка запуска {0}:\n{1}", appName, ex.Message), "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void BtnNewProject_Click(object sender, EventArgs e)
+        public void LaunchEmptyPR()
         {
-            using (var sfd = new SaveFileDialog())
-            {
-                sfd.Filter = "Проект Premiere Pro (*.prproj)|*.prproj";
-                sfd.Title = "Создать новый проект Premiere Pro";
-                sfd.FileName = "Новый проект.prproj";
-                string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                sfd.InitialDirectory = Path.Combine(docs, "Adobe", "Premiere Pro");
-
-                if (sfd.ShowDialog() == DialogResult.OK)
-                {
-                    try
-                    {
-                        CreateBlankProject(sfd.FileName);
-                        RefreshProjects();
-                        LaunchProject(sfd.FileName);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Не удалось создать проект:\n" + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-            }
+            LaunchSpecificFile(null, AppKind.PR);
         }
 
-        private void CreateBlankProject(string targetPath)
+        public void LaunchEmptyAE()
+        {
+            LaunchSpecificFile(null, AppKind.AE);
+        }
+
+        public static void CreateBlankPremiereProject(string targetPath)
         {
             string safeName = System.Security.SecurityElement.Escape(Path.GetFileName(targetPath));
             string xml = @"<?xml version=""1.0"" encoding=""UTF-8"" ?>
@@ -1611,12 +2585,39 @@ namespace PrLauncher
         private void BtnCleanCache_Click(object sender, EventArgs e)
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string[] cacheDirs = new string[]
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            var cacheDirs = new List<string>
             {
                 Path.Combine(appData, "Adobe", "Common", "Media Cache Files"),
                 Path.Combine(appData, "Adobe", "Common", "Media Cache"),
                 Path.Combine(appData, "Adobe", "Common", "Peak Files")
             };
+
+            // After Effects Cache
+            string aeDir = Path.Combine(appData, "Adobe", "After Effects");
+            if (Directory.Exists(aeDir))
+            {
+                try
+                {
+                    var sub = Directory.GetDirectories(aeDir, "Cache", SearchOption.AllDirectories);
+                    cacheDirs.AddRange(sub);
+                    var subDisk = Directory.GetDirectories(aeDir, "Disk Cache", SearchOption.AllDirectories);
+                    cacheDirs.AddRange(subDisk);
+                }
+                catch { }
+            }
+
+            string aeLocalDir = Path.Combine(localAppData, "Adobe", "After Effects");
+            if (Directory.Exists(aeLocalDir))
+            {
+                try
+                {
+                    var subLocal = Directory.GetDirectories(aeLocalDir, "Disk Cache", SearchOption.AllDirectories);
+                    cacheDirs.AddRange(subLocal);
+                }
+                catch { }
+            }
 
             long totalBytes = 0;
             int totalFiles = 0;
@@ -1639,10 +2640,10 @@ namespace PrLauncher
             }
 
             double mb = totalBytes / (1024.0 * 1024.0);
-            string msg = string.Format("Найдено файлов кэша Premiere Pro: {0}\nОбщий объём: {1:F1} МБ ({2:F2} ГБ)\n\nПапки:\n- Media Cache Files (.cfa)\n- Peak Files (.pek)\n- Media Cache (.mcdb)\n\nОчистить кэш сейчас? (Premiere Pro должен быть закрыт)",
+            string msg = string.Format("Найдено файлов кэша Premiere Pro и After Effects: {0}\nОбщий объём: {1:F1} МБ ({2:F2} ГБ)\n\nБудут очищены:\n- Media Cache Files (.cfa)\n- Peak Files (.pek)\n- Media Cache (.mcdb)\n- After Effects Disk Cache\n\nОчистить кэш сейчас? (Premiere Pro и After Effects должны быть закрыты)",
                 totalFiles, mb, mb / 1024.0);
 
-            var dr = MessageBox.Show(msg, "Очистка кэша Premiere Pro", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            var dr = MessageBox.Show(msg, "Очистка кэша Adobe CC", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
             if (dr == DialogResult.Yes)
             {
                 int deleted = 0;
@@ -1671,12 +2672,25 @@ namespace PrLauncher
             try
             {
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                string[] cacheDirs = new string[]
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+                var cacheDirs = new List<string>
                 {
                     Path.Combine(appData, "Adobe", "Common", "Media Cache Files"),
                     Path.Combine(appData, "Adobe", "Common", "Media Cache"),
                     Path.Combine(appData, "Adobe", "Common", "Peak Files")
                 };
+
+                string aeDir = Path.Combine(appData, "Adobe", "After Effects");
+                if (Directory.Exists(aeDir))
+                {
+                    try
+                    {
+                        var sub = Directory.GetDirectories(aeDir, "Cache", SearchOption.AllDirectories);
+                        cacheDirs.AddRange(sub);
+                    }
+                    catch { }
+                }
 
                 long totalBytes = 0;
                 foreach (var d in cacheDirs)
@@ -1761,6 +2775,9 @@ namespace PrLauncher
                     var prMatch = Regex.Match(json, @"""premiereExe"":\s*""(.*?)""");
                     if (prMatch.Success) premiereExePath = prMatch.Groups[1].Value.Replace(@"\\", @"\");
 
+                    var aeMatch = Regex.Match(json, @"""afterEffectsExe"":\s*""(.*?)""");
+                    if (aeMatch.Success) afterEffectsExePath = aeMatch.Groups[1].Value.Replace(@"\\", @"\");
+
                     var pinMatches = Regex.Matches(json, @"""pinned"":\s*\[(.*?)\]", RegexOptions.Singleline);
                     if (pinMatches.Count > 0)
                     {
@@ -1782,7 +2799,8 @@ namespace PrLauncher
             {
                 var sb = new StringBuilder();
                 sb.AppendLine("{");
-                sb.AppendLine(string.Format("  \"premiereExe\": \"{0}\",", premiereExePath.Replace(@"\", @"\\").Replace("\"", "\\\"")));
+                sb.AppendLine(string.Format("  \"premiereExe\": \"{0}\",", (premiereExePath ?? "").Replace(@"\", @"\\").Replace("\"", "\\\"")));
+                sb.AppendLine(string.Format("  \"afterEffectsExe\": \"{0}\",", (afterEffectsExePath ?? "").Replace(@"\", @"\\").Replace("\"", "\\\"")));
                 sb.AppendLine("  \"pinned\": [");
                 int count = 0;
                 foreach (var p in pinnedPaths)

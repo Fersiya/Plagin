@@ -4,7 +4,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '1.4.0';
   const REPO = 'Fersiya/Plagin';
   const ASSET = 'SubPanel-Setup.exe';
   const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
@@ -130,6 +130,14 @@
           : 'Выбранных знаков в тексте нет.';
       case 'anim_applied':
         return 'Анимация «' + r.anim + '» применена к слоям: ' + r.layers + (r.skipped ? '. Пропущено: ' + r.skipped : '') + '.';
+      case 'box_created':
+        return 'Авто-подложка создана: обработано ' + r.count + ' ' + plural(r.count, 'слой', 'слоя', 'слоёв') + (r.skipped ? '. Пропущено: ' + r.skipped : '') + '.';
+      case 'anchor_centered':
+        return 'Anchor Point центрирован: обработано ' + r.count + ' ' + plural(r.count, 'слой', 'слоя', 'слоёв') + (r.skipped ? '. Пропущено: ' + r.skipped : '') + '.';
+      case 'purged':
+        return 'Память и кэш After Effects полностью очищены!';
+      case 'typo_applied':
+        return 'Типографика исправлена (тире, кавычки, предлоги): ' + (r.layers || r.clips) + ' слоёв/клипов.';
       case 'censored':
         return 'Цензура применена: обработано ' + (r.layers || r.clips) + ' слоёв/клипов.';
       case 'wrapped':
@@ -238,6 +246,33 @@
       } catch (e) {}
     }
     return out;
+  }
+
+  function sp_typo(text) {
+    if (text === null || text === undefined || text === '') return text;
+    var s = String(text);
+    s = s.replace(/[ \t]{2,}/g, ' ');
+    s = s.replace(/(\s)-{1,2}(\s)/g, '$1—$2');
+    s = s.replace(/(^|\r\n|[\r\n])-{1,2}\s+/g, '$1— ');
+    s = s.replace(/\.{3}/g, '…');
+    var inQuote = false;
+    var chars = s.split('');
+    for (var i = 0; i < chars.length; i++) {
+      if (chars[i] === '"') {
+        if (!inQuote) {
+          chars[i] = '«';
+          inQuote = true;
+        } else {
+          chars[i] = '»';
+          inQuote = false;
+        }
+      }
+    }
+    s = chars.join('');
+    var preps = 'в|на|с|и|к|о|по|из|от|у|за|под|над|для|не|но|что|как|а|то|же|ли';
+    var rePrep = new RegExp('(^|[\\s«\"\\(\\[])(' + preps + ')\\s+', 'gi');
+    s = s.replace(rePrep, '$1$2\u00A0');
+    return s;
   }
 
   /* ---------- интерфейс ---------- */
@@ -444,6 +479,26 @@
 
   async function onAnim(type) {
     const r = await callHost('anim', { anim: type });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onBox() {
+    const r = await callHost('box', { padX: 36, padY: 20, roundness: 14, boxColor: '#000000', boxOpacity: 85 });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onAnchor() {
+    const r = await callHost('anchor', { live: false });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onPurge() {
+    const r = await callHost('purge', {});
+    toast(describe(r), !r.ok);
+  }
+
+  async function onTypo() {
+    const r = await callHost('typo', {});
     toast(describe(r), !r.ok);
   }
 
@@ -757,18 +812,31 @@
 
     $('#apply').addEventListener('click', (e) => run(e.currentTarget, onApply));
     $('#strip').addEventListener('click', (e) => run(e.currentTarget, onStrip));
+    $('#typoBtn').addEventListener('click', (e) => run(e.currentTarget, onTypo));
     $('#censorBtn').addEventListener('click', (e) => run(e.currentTarget, onCensor));
     $('#clip').addEventListener('click', (e) => run(e.currentTarget, onClip));
     $('#srt').addEventListener('click', (e) => run(e.currentTarget, onSrt));
 
+    $('#btnBox').addEventListener('click', (e) => run(e.currentTarget, onBox));
+    $('#btnAnchor').addEventListener('click', (e) => run(e.currentTarget, onAnchor));
+    $('#btnPurge').addEventListener('click', (e) => run(e.currentTarget, onPurge));
+
     $('#animBounce').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('bounce')));
     $('#animFade').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('fade')));
+    $('#animTypewriter').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('typewriter')));
+    $('#animBlur').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('blur')));
     $('#animWiggle').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('wiggle')));
     $('#animReset').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('reset')));
 
     $('#manualClean').addEventListener('click', () => {
       const ta = $('#manual');
       ta.value = stripText(ta.value);
+    });
+    $('#manualTypo').addEventListener('click', () => {
+      const ta = $('#manual');
+      if (!ta.value) { toast('Поле пустое.', true); return; }
+      ta.value = sp_typo(ta.value);
+      toast('Типографика текста в поле исправлена.');
     });
     $('#manualCopy').addEventListener('click', () => {
       const ta = $('#manual');

@@ -6,7 +6,7 @@ SetCompressor /SOLID lzma
 
 !define APPNAME "SubPanel"
 !define EXTID "com.fersiya.subpanel"
-!define VERSION "1.3.0"
+!define VERSION "1.4.0"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${EXTID}"
 
 Name "${APPNAME} ${VERSION}"
@@ -38,12 +38,12 @@ Section "Install"
   File /r "..\build\payload\*.*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  ; Создание ярлыков для быстрого лаунчера PrLauncher
+  ; Создание ярлыков для быстрого лаунчера
   ${If} ${FileExists} "$INSTDIR\PrLauncher.exe"
     CreateDirectory "$SMPROGRAMS\SubPanel"
-    CreateShortcut "$SMPROGRAMS\SubPanel\PrLauncher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск проектов Premiere Pro"
+    CreateShortcut "$SMPROGRAMS\SubPanel\Adobe Studio Launcher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск Premiere Pro и After Effects"
     CreateShortcut "$SMPROGRAMS\SubPanel\Удалить SubPanel.lnk" "$INSTDIR\Uninstall.exe"
-    CreateShortcut "$DESKTOP\PrLauncher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск проектов Premiere Pro"
+    CreateShortcut "$DESKTOP\Adobe Studio Launcher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск Premiere Pro и After Effects"
   ${EndIf}
 
   ; Неподписанные панели CEP загружаются только при включённом PlayerDebugMode.
@@ -64,6 +64,7 @@ SectionEnd
 
 Section "Uninstall"
   ; Удаление ярлыков
+  Delete "$DESKTOP\Adobe Studio Launcher.lnk"
   Delete "$DESKTOP\PrLauncher.lnk"
   RMDir /r "$SMPROGRAMS\SubPanel"
 

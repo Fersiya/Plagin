@@ -135,11 +135,18 @@
 
     <section class="card ae-only">
       <div class="card-head">
-        <h2>Анимация (After Effects)</h2>
+        <h2>Инструменты After Effects</h2>
       </div>
       <div class="row">
+        <button id="btnBox" class="ghost wide" type="button" title="Создать авто-подложку под текст (шейп с auto-resize по sourceRectAtTime)">📦 Авто-плашка</button>
+        <button id="btnAnchor" class="ghost wide" type="button" title="Центрировать якорную точку (Anchor Point) в геометрический центр текста">🎯 Центр Anchor</button>
+        <button id="btnPurge" class="ghost wide" type="button" title="Очистить память превью и дисковый кэш AE (Purge All Memory)">🧹 Очистить RAM</button>
+      </div>
+      <div class="row anim-row" style="margin-top: 8px;">
         <button id="animBounce" class="ghost wide" type="button" title="Пружинящий вылет Pop-Up">Pop-Up</button>
         <button id="animFade" class="ghost wide" type="button" title="Появление снизу">Fade Up</button>
+        <button id="animTypewriter" class="ghost wide" type="button" title="Печатная машинка">Машинка</button>
+        <button id="animBlur" class="ghost wide" type="button" title="Кинематографичный блюр">Блюр</button>
         <button id="animWiggle" class="ghost wide" type="button" title="Живое покачивание">Wiggle</button>
         <button id="animReset" class="ghost tiny" type="button" title="Сбросить анимацию">Сброс</button>
       </div>
@@ -147,14 +154,17 @@
 
     <section class="card">
       <div class="card-head">
-        <h2>Знаки препинания</h2>
+        <h2>Знаки препинания и текст</h2>
         <div class="head-actions">
           <button id="marksAll" class="ghost tiny" type="button">Все</button>
           <button id="marksReset" class="ghost tiny" type="button">Сброс</button>
         </div>
       </div>
       <div id="marks" class="chips marks"></div>
-      <button id="strip" class="primary alt" type="button">Убрать знаки в выделенном</button>
+      <div class="row" style="margin-bottom: 6px;">
+        <button id="strip" class="primary alt wide" type="button">Убрать знаки</button>
+        <button id="typoBtn" class="primary alt wide" type="button" title="Превратить дефисы в тире, лапки в «елочки», привязать предлоги">✍️ Типограф</button>
+      </div>
       <p class="hint" id="stripHint"></p>
 
       <div class="row censor-row">
@@ -174,7 +184,8 @@
           <summary>Вручную, если буфер не работает</summary>
           <textarea id="manual" rows="5" placeholder="Вставь текст субтитров сюда (Ctrl+V)"></textarea>
           <div class="row">
-            <button id="manualClean" class="ghost wide" type="button">Очистить</button>
+            <button id="manualClean" class="ghost wide" type="button">Очистить знаки</button>
+            <button id="manualTypo" class="ghost wide" type="button">Типограф</button>
             <button id="manualCopy" class="ghost wide" type="button">Копировать</button>
           </div>
         </details>

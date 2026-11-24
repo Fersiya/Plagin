@@ -175,6 +175,8 @@ select.ghost option {
 .small { border: 0; border-radius: 8px; padding: 0 14px; background: var(--accent); color: #fff; font-weight: 700; }
 
 .row { display: flex; gap: 8px; margin-top: 8px; }
+.anim-row { flex-wrap: wrap; }
+.primary.wide { flex: 1; width: auto; }
 .save-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .save-row[hidden] { display: none; }
 
