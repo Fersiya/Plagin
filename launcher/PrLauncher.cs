@@ -1565,6 +1565,215 @@ namespace PrLauncher
         }
     }
 
+    public class MediaToolsDialog : Form
+    {
+        private TextBox txtVideo;
+        private Button btnBrowseVideo;
+        private Button btnMakeProxy;
+        private Label lblProxyStatus;
+
+        private TextBox txtSdFolder;
+        private Button btnBrowseSd;
+        private Button btnSortSd;
+        private Label lblSortStatus;
+        private Button btnClose;
+
+        public MediaToolsDialog()
+        {
+            this.Text = "Медиа-инструменты монтажера — Proxy & Сортировщик";
+            this.Size = new Size(620, 390);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = UITheme.Bg;
+            this.ForeColor = UITheme.TextPrimary;
+            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+
+            InitializeUI();
+        }
+
+        private void InitializeUI()
+        {
+            // Section 1: ProRes Proxy Generator
+            var lblSec1 = new Label { Text = "1. Быстрый генератор монтажных Proxy (Apple ProRes):", Font = new Font("Segoe UI", 10f, FontStyle.Bold), Location = new Point(24, 18), AutoSize = true, ForeColor = UITheme.TextPrimary };
+            var lblDesc1 = new Label { Text = "Конвертирует тяжелые 4K/H.265 видео в плавные 720p ProRes Proxy через FFmpeg.", Location = new Point(24, 40), AutoSize = true, ForeColor = UITheme.TextDim };
+
+            txtVideo = new TextBox { Location = new Point(24, 66), Width = 450, BackColor = UITheme.CardBg, ForeColor = UITheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 9.5f) };
+            btnBrowseVideo = MainForm.CreateCustomButton("Обзор...", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnBrowseVideo.Location = new Point(484, 64);
+            btnBrowseVideo.Height = 27;
+            btnBrowseVideo.Click += (s, e) =>
+            {
+                using (var ofd = new OpenFileDialog())
+                {
+                    ofd.Filter = "Видео файлы (*.mp4;*.mov;*.mkv)|*.mp4;*.mov;*.mkv|Все файлы (*.*)|*.*";
+                    if (ofd.ShowDialog() == DialogResult.OK) txtVideo.Text = ofd.FileName;
+                }
+            };
+
+            btnMakeProxy = MainForm.CreateCustomButton("▶ Создать ProRes Proxy", 185, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnMakeProxy.Location = new Point(24, 102);
+            btnMakeProxy.Height = 32;
+            btnMakeProxy.Click += BtnMakeProxy_Click;
+
+            lblProxyStatus = new Label { Text = "", Location = new Point(214, 108), AutoSize = true, ForeColor = UITheme.TextSecondary };
+
+            // Section 2: Footage Auto-Sorter
+            var lblSec2 = new Label { Text = "2. Авто-сортировщик съемок с SD-карты:", Font = new Font("Segoe UI", 10f, FontStyle.Bold), Location = new Point(24, 160), AutoSize = true, ForeColor = UITheme.TextPrimary };
+            var lblDesc2 = new Label { Text = "Раскладывает файлы по папкам: 01_RAW (видео), 02_AUDIO (звук), 03_ASSETS (фото).", Location = new Point(24, 182), AutoSize = true, ForeColor = UITheme.TextDim };
+
+            txtSdFolder = new TextBox { Location = new Point(24, 208), Width = 450, BackColor = UITheme.CardBg, ForeColor = UITheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 9.5f) };
+            btnBrowseSd = MainForm.CreateCustomButton("Обзор...", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnBrowseSd.Location = new Point(484, 206);
+            btnBrowseSd.Height = 27;
+            btnBrowseSd.Click += (s, e) =>
+            {
+                using (var fbd = new FolderBrowserDialog())
+                {
+                    if (fbd.ShowDialog() == DialogResult.OK) txtSdFolder.Text = fbd.SelectedPath;
+                }
+            };
+
+            btnSortSd = MainForm.CreateCustomButton("📁 Разложить по папкам", 180, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnSortSd.Location = new Point(24, 244);
+            btnSortSd.Height = 32;
+            btnSortSd.Click += BtnSortSd_Click;
+
+            lblSortStatus = new Label { Text = "", Location = new Point(214, 250), AutoSize = true, ForeColor = UITheme.TextSecondary };
+
+            btnClose = MainForm.CreateCustomButton("Закрыть", 100, UITheme.CardBg, UITheme.TextSecondary, UITheme.CardBorder, UITheme.CardHover);
+            btnClose.Location = new Point(480, 295);
+            btnClose.Height = 34;
+            btnClose.Click += (s, e) => this.Close();
+
+            this.Controls.Add(lblSec1);
+            this.Controls.Add(lblDesc1);
+            this.Controls.Add(txtVideo);
+            this.Controls.Add(btnBrowseVideo);
+            this.Controls.Add(btnMakeProxy);
+            this.Controls.Add(lblProxyStatus);
+
+            this.Controls.Add(lblSec2);
+            this.Controls.Add(lblDesc2);
+            this.Controls.Add(txtSdFolder);
+            this.Controls.Add(btnBrowseSd);
+            this.Controls.Add(btnSortSd);
+            this.Controls.Add(lblSortStatus);
+            this.Controls.Add(btnClose);
+        }
+
+        private void BtnMakeProxy_Click(object sender, EventArgs e)
+        {
+            string file = txtVideo.Text.Trim();
+            if (string.IsNullOrEmpty(file) || !File.Exists(file))
+            {
+                MessageBox.Show("Выберите существующий видео файл.", "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string outProxy = Path.Combine(Path.GetDirectoryName(file), Path.GetFileNameWithoutExtension(file) + "_proxy.mov");
+            lblProxyStatus.Text = "Конвертация в ProRes Proxy...";
+            lblProxyStatus.ForeColor = UITheme.Accent;
+            btnMakeProxy.Enabled = false;
+
+            System.Threading.ThreadPool.QueueUserWorkItem((state) =>
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "ffmpeg",
+                        Arguments = string.Format("-y -i \"{0}\" -vf scale=1280:720 -c:v prores_ks -profile:v 0 -c:a copy \"{1}\"", file, outProxy),
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardError = true
+                    };
+                    using (var p = Process.Start(psi))
+                    {
+                        p.WaitForExit();
+                        this.Invoke(new Action(() =>
+                        {
+                            btnMakeProxy.Enabled = true;
+                            if (p.ExitCode == 0 && File.Exists(outProxy))
+                            {
+                                lblProxyStatus.Text = "Готово! Создан: " + Path.GetFileName(outProxy);
+                                lblProxyStatus.ForeColor = UITheme.Green;
+                                MessageBox.Show("Proxy успешно создан:\n" + outProxy, "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                lblProxyStatus.Text = "Ошибка FFmpeg";
+                                lblProxyStatus.ForeColor = UITheme.Red;
+                            }
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        btnMakeProxy.Enabled = true;
+                        lblProxyStatus.Text = "Ошибка: " + ex.Message;
+                        lblProxyStatus.ForeColor = UITheme.Red;
+                    }));
+                }
+            });
+        }
+
+        private void BtnSortSd_Click(object sender, EventArgs e)
+        {
+            string dir = txtSdFolder.Text.Trim();
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            {
+                MessageBox.Show("Выберите существующую папку со съемочным материалом.", "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                string rawDir = Path.Combine(dir, "01_RAW");
+                string audioDir = Path.Combine(dir, "02_AUDIO");
+                string assetsDir = Path.Combine(dir, "03_ASSETS");
+
+                Directory.CreateDirectory(rawDir);
+                Directory.CreateDirectory(audioDir);
+                Directory.CreateDirectory(assetsDir);
+
+                var allFiles = Directory.GetFiles(dir, "*.*", SearchOption.TopDirectoryOnly);
+                int moved = 0;
+
+                foreach (var f in allFiles)
+                {
+                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                    string dest = null;
+
+                    if (ext == ".mp4" || ext == ".mov" || ext == ".mkv" || ext == ".braw" || ext == ".avi")
+                        dest = Path.Combine(rawDir, Path.GetFileName(f));
+                    else if (ext == ".wav" || ext == ".mp3" || ext == ".aac" || ext == ".m4a")
+                        dest = Path.Combine(audioDir, Path.GetFileName(f));
+                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".psd" || ext == ".ai")
+                        dest = Path.Combine(assetsDir, Path.GetFileName(f));
+
+                    if (dest != null && !File.Exists(dest))
+                    {
+                        File.Move(f, dest);
+                        moved++;
+                    }
+                }
+
+                lblSortStatus.Text = string.Format("Перемещено файлов: {0}", moved);
+                lblSortStatus.ForeColor = UITheme.Green;
+                MessageBox.Show(string.Format("Сортировка завершена!\nПеремещено файлов: {0}\nпо папкам 01_RAW, 02_AUDIO, 03_ASSETS.", moved), "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                lblSortStatus.Text = "Ошибка: " + ex.Message;
+                lblSortStatus.ForeColor = UITheme.Red;
+            }
+        }
+    }
+
     public class ExeConfigDialog : Form
     {
         private TextBox txtPr;
@@ -1902,13 +2111,13 @@ namespace PrLauncher
             searchBox = new ModernSearchBox
             {
                 Location = new Point(20, 6),
-                Width = 340,
+                Width = 295,
                 Height = 36
             };
             searchBox.TextChangedEvent += (s, e) => ApplyFilter();
 
-            btnNewProject = CreateCustomButton("+ Проект со структурой", 180, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
-            btnNewProject.Location = new Point(375, 6);
+            btnNewProject = CreateCustomButton("+ Проект со структурой", 175, UITheme.Accent, Color.White, UITheme.Accent, UITheme.AccentHover);
+            btnNewProject.Location = new Point(325, 6);
             btnNewProject.Height = 36;
             btnNewProject.Click += (s, e) =>
             {
@@ -1922,18 +2131,30 @@ namespace PrLauncher
                 }
             };
 
-            btnCleanCache = CreateCustomButton("Кэш: 0 МБ", 130, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
-            btnCleanCache.Location = new Point(568, 6);
+            var btnMediaTools = CreateCustomButton("Медиа-инструменты...", 155, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnMediaTools.Location = new Point(508, 6);
+            btnMediaTools.Height = 36;
+            btnMediaTools.Click += (s, e) =>
+            {
+                using (var dlg = new MediaToolsDialog())
+                {
+                    dlg.ShowDialog(this);
+                }
+            };
+
+            btnCleanCache = CreateCustomButton("Кэш: 0 МБ", 120, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnCleanCache.Location = new Point(671, 6);
             btnCleanCache.Height = 36;
             btnCleanCache.Click += BtnCleanCache_Click;
 
-            btnRefresh = CreateCustomButton("Обновить", 100, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
-            btnRefresh.Location = new Point(710, 6);
+            btnRefresh = CreateCustomButton("Обновить", 95, UITheme.CardBg, UITheme.TextPrimary, UITheme.CardBorder, UITheme.CardHover);
+            btnRefresh.Location = new Point(799, 6);
             btnRefresh.Height = 36;
             btnRefresh.Click += (s, e) => RefreshProjects();
 
             searchPanel.Controls.Add(searchBox);
             searchPanel.Controls.Add(btnNewProject);
+            searchPanel.Controls.Add(btnMediaTools);
             searchPanel.Controls.Add(btnCleanCache);
             searchPanel.Controls.Add(btnRefresh);
 
@@ -2074,14 +2295,14 @@ namespace PrLauncher
             using (var brush = new SolidBrush(Color.FromArgb(192, 132, 252)))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
-                g.DrawString("v1.4.0", font, brush, verRect, sf);
+                g.DrawString("v1.5.0", font, brush, verRect, sf);
             }
 
             // 3. Subtitle
             using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
             using (var brush = new SolidBrush(UITheme.TextSecondary))
             {
-                g.DrawString("Быстрый запуск Premiere Pro и After Effects без начального экрана", font, brush, titleX, 44);
+                g.DrawString("Быстрый запуск Premiere Pro и After Effects • AI Bridge • Proxy & Сортировщик", font, brush, titleX, 44);
             }
         }
 

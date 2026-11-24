@@ -4,7 +4,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.5.0';
   const REPO = 'Fersiya/Plagin';
   const ASSET = 'SubPanel-Setup.exe';
   const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
@@ -138,6 +138,12 @@
         return 'Память и кэш After Effects полностью очищены!';
       case 'typo_applied':
         return 'Типографика исправлена (тире, кавычки, предлоги): ' + (r.layers || r.clips) + ' слоёв/клипов.';
+      case 'markers_added':
+        return 'Добавлено ' + r.count + ' маркеров на таймлайн.';
+      case 'punchin_applied':
+        return 'Punch-In зум применен (' + (r.keys || r.markers || 0) + ' точек смены масштаба).';
+      case 'silence_marked':
+        return 'Размечено участков тишины: ' + r.count + '.';
       case 'censored':
         return 'Цензура применена: обработано ' + (r.layers || r.clips) + ' слоёв/клипов.';
       case 'wrapped':
@@ -497,6 +503,23 @@
     toast(describe(r), !r.ok);
   }
 
+  async function onPunchIn() {
+    const r = await callHost('punchin', { interval: 3.0, scale: 115 });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onBeatSync() {
+    const times = [];
+    for (let t = 0.5; t <= 30.0; t += 0.5) times.push(t);
+    const r = await callHost('add_markers', { times: times, name: 'Beat 120BPM' });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onSfx(name) {
+    const r = await callHost('add_markers', { times: [0.0], name: 'SFX: ' + name, comments: 'Звуковой эффект ' + name });
+    toast(describe(r), !r.ok);
+  }
+
   async function onTypo() {
     const r = await callHost('typo', {});
     toast(describe(r), !r.ok);
@@ -821,6 +844,16 @@
     $('#btnAnchor').addEventListener('click', (e) => run(e.currentTarget, onAnchor));
     $('#btnPurge').addEventListener('click', (e) => run(e.currentTarget, onPurge));
 
+    const btnPunchIn = $('#btnPunchIn');
+    if (btnPunchIn) btnPunchIn.addEventListener('click', (e) => run(e.currentTarget, onPunchIn));
+
+    const btnBeatSync = $('#btnBeatSync');
+    if (btnBeatSync) btnBeatSync.addEventListener('click', (e) => run(e.currentTarget, onBeatSync));
+
+    $$('.sfx-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => run(e.currentTarget, () => onSfx(btn.dataset.sfx || 'sound')));
+    });
+
     $('#animBounce').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('bounce')));
     $('#animFade').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('fade')));
     $('#animTypewriter').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('typewriter')));
@@ -862,6 +895,34 @@
       if (h.ok) setHost(h.host);
       const f = await callHost('fonts');
       if (f.ok && f.fonts && f.fonts.length) initFonts(f.fonts);
+
+      if (typeof SP_Bridge !== 'undefined') {
+        SP_Bridge.init(window.__adobe_cep__, h.ok ? h.host : 'UNKNOWN', (bStatus) => {
+          const tag = $('#bridgeTag');
+          const txt = $('#bridgeText');
+          if (!tag || !txt) return;
+          if (bStatus && bStatus.running) {
+            tag.classList.add('active');
+            txt.textContent = 'AI: ' + bStatus.port;
+            tag.title = 'AI Bridge активен: http://127.0.0.1:' + bStatus.port + ' (кликни, чтобы скопировать)';
+          } else {
+            tag.classList.remove('active');
+            txt.textContent = 'AI: off';
+            tag.title = 'AI Bridge не запущен';
+          }
+        });
+
+        $('#bridgeTag')?.addEventListener('click', () => {
+          const st = SP_Bridge.getStatus();
+          if (st.running) {
+            const url = 'http://127.0.0.1:' + st.port;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(url);
+              toast('Адрес AI Bridge скопирован: ' + url);
+            }
+          }
+        });
+      }
     }
     if (inCEP || mock) checkUpdate();
   }

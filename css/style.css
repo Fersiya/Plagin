@@ -50,6 +50,22 @@ header {
 .host.pr i { background: #9999ff; box-shadow: 0 0 8px #9999ff; }
 .host.ae i { background: #9d8cff; box-shadow: 0 0 8px #9d8cff; }
 
+.header-right { display: flex; align-items: center; gap: 8px; }
+.bridge-tag {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 99px;
+  background: var(--card); border: 1px solid var(--line);
+  color: var(--dim); font-size: 10px; font-weight: 600;
+  cursor: pointer;
+}
+.bridge-tag:hover { border-color: var(--accent); color: var(--text); }
+.bridge-dot { width: 6px; height: 6px; border-radius: 50%; background: #6b7280; }
+.bridge-tag.active .bridge-dot { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.bridge-tag.active { color: #34d399; }
+.card-subhead { font-size: 10px; color: var(--dim); font-weight: 600; margin: 8px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+.sfx-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.sfx-btn { flex: 1 1 auto; text-align: center; }
+
 main { padding: 8px 12px 0; display: grid; gap: 10px; }
 
 .card {

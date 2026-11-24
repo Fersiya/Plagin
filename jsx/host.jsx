@@ -965,6 +965,148 @@ function pr_import_srt(d) {
   return { ok: true, code: 'srt_imported', track: track };
 }
 
+function ae_add_markers(d) {
+  var comp = ae_comp();
+  var times = d.times || [];
+  if (!times.length) throw new Error('NO_TIMES_PROVIDED');
+  app.beginUndoGroup('SubPanel: Add Markers');
+  var count = 0;
+  try {
+    for (var i = 0; i < times.length; i++) {
+      var tSec = parseFloat(times[i]);
+      if (isNaN(tSec)) continue;
+      var mv = new MarkerValue(d.name || 'Beat');
+      if (d.comments) mv.comment = d.comments;
+      comp.markerProperty.setValueAtTime(tSec, mv);
+      count++;
+    }
+  } finally {
+    app.endUndoGroup();
+  }
+  return { ok: true, code: 'markers_added', count: count };
+}
+
+function pr_add_markers(d) {
+  var seq = pr_seq();
+  var times = d.times || [];
+  if (!times.length) throw new Error('NO_TIMES_PROVIDED');
+  var count = 0;
+  var markers = seq.markers;
+  for (var i = 0; i < times.length; i++) {
+    var tSec = parseFloat(times[i]);
+    if (isNaN(tSec)) continue;
+    var tObj = new Time();
+    tObj.seconds = tSec;
+    var m = markers.createMarker(tObj);
+    if (d.name) m.name = d.name;
+    if (d.comments) m.comments = d.comments;
+    count++;
+  }
+  return { ok: true, code: 'markers_added', count: count };
+}
+
+function ae_punchin(d) {
+  var comp = ae_comp();
+  var target = null;
+  if (comp.selectedLayers.length > 0) {
+    target = comp.selectedLayers[0];
+  } else if (comp.numLayers > 0) {
+    target = comp.layer(1);
+  }
+  if (!target) throw new Error('NO_LAYER_FOUND');
+
+  var interval = parseFloat(d.interval) || 3.0;
+  var scaleFactor = parseFloat(d.scale) || 115.0;
+  var count = 0;
+
+  app.beginUndoGroup('SubPanel: Punch-In');
+  try {
+    var scaleProp = target.property('ADBE Transform Group').property('ADBE Scale');
+    var isZoomed = false;
+    for (var t = target.inPoint; t < target.outPoint; t += interval) {
+      var currentScale = isZoomed ? [scaleFactor, scaleFactor, 100] : [100, 100, 100];
+      scaleProp.setValueAtTime(t, currentScale);
+      var kIdx = scaleProp.nearestKeyIndex(t);
+      scaleProp.setInterpolationTypeAtKey(kIdx, KeyframeInterpolationType.HOLD, KeyframeInterpolationType.HOLD);
+      isZoomed = !isZoomed;
+      count++;
+    }
+  } finally {
+    app.endUndoGroup();
+  }
+  return { ok: true, code: 'punchin_applied', keys: count, interval: interval, scale: scaleFactor };
+}
+
+function pr_punchin(d) {
+  var seq = pr_seq();
+  var interval = parseFloat(d.interval) || 3.0;
+  var scaleFactor = parseFloat(d.scale) || 115.0;
+  var duration = 60.0;
+  try {
+    if (seq.end && !isNaN(parseFloat(seq.end))) duration = parseFloat(seq.end);
+  } catch (e) {}
+
+  var count = 0;
+  var markers = seq.markers;
+  var isZoomed = false;
+  for (var t = 0; t < duration; t += interval) {
+    var tObj = new Time();
+    tObj.seconds = t;
+    var m = markers.createMarker(tObj);
+    m.name = isZoomed ? 'Zoom 115%' : 'Wide 100%';
+    m.comments = 'Punch-In Cut Point';
+    isZoomed = !isZoomed;
+    count++;
+  }
+  return { ok: true, code: 'punchin_applied', markers: count, interval: interval, scale: scaleFactor };
+}
+
+function ae_silence_cut(d) {
+  var comp = ae_comp();
+  var silences = d.silences || [];
+  var count = 0;
+  app.beginUndoGroup('SubPanel: Silence Markers');
+  try {
+    for (var i = 0; i < silences.length; i++) {
+      var s = silences[i];
+      var tStart = parseFloat(s.start);
+      var tEnd = parseFloat(s.end);
+      if (!isNaN(tStart)) {
+        var mv = new MarkerValue('Cut Silence');
+        if (!isNaN(tEnd) && tEnd > tStart) mv.duration = tEnd - tStart;
+        comp.markerProperty.setValueAtTime(tStart, mv);
+        count++;
+      }
+    }
+  } finally {
+    app.endUndoGroup();
+  }
+  return { ok: true, code: 'silence_marked', count: count };
+}
+
+function pr_silence_cut(d) {
+  var seq = pr_seq();
+  var silences = d.silences || [];
+  var count = 0;
+  var markers = seq.markers;
+  for (var i = 0; i < silences.length; i++) {
+    var s = silences[i];
+    var tStart = parseFloat(s.start);
+    var tEnd = parseFloat(s.end);
+    if (!isNaN(tStart)) {
+      var tObj = new Time();
+      tObj.seconds = tStart;
+      var m = markers.createMarker(tObj);
+      m.name = 'Silence Cut';
+      if (!isNaN(tEnd) && tEnd > tStart) {
+        m.comments = 'Длительность: ' + (tEnd - tStart).toFixed(2) + 'с';
+      }
+      count++;
+    }
+  }
+  return { ok: true, code: 'silence_marked', count: count };
+}
+
 /* ---------- вход из панели ---------- */
 
 function SP_run(action, payload) {
@@ -995,6 +1137,12 @@ function SP_run(action, payload) {
       r = ae_wrap(d);
     } else if (SP_HOST === 'AE' && action === 'case') {
       r = ae_case(d);
+    } else if (SP_HOST === 'AE' && action === 'add_markers') {
+      r = ae_add_markers(d);
+    } else if (SP_HOST === 'AE' && action === 'punchin') {
+      r = ae_punchin(d);
+    } else if (SP_HOST === 'AE' && action === 'silence_cut') {
+      r = ae_silence_cut(d);
     } else if (SP_HOST === 'PR' && action === 'apply') {
       r = pr_apply(d);
     } else if (SP_HOST === 'PR' && action === 'strip') {
@@ -1007,6 +1155,12 @@ function SP_run(action, payload) {
       r = pr_wrap(d);
     } else if (SP_HOST === 'PR' && action === 'case') {
       r = pr_case(d);
+    } else if (SP_HOST === 'PR' && action === 'add_markers') {
+      r = pr_add_markers(d);
+    } else if (SP_HOST === 'PR' && action === 'punchin') {
+      r = pr_punchin(d);
+    } else if (SP_HOST === 'PR' && action === 'silence_cut') {
+      r = pr_silence_cut(d);
     } else if (SP_HOST === 'PR' && action === 'srt') {
       r = pr_import_srt(d);
     } else {

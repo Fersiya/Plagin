@@ -9,7 +9,13 @@
 <body>
   <header>
     <div class="logo"><span class="mark">Aa</span><b>SubPanel</b><small id="ver"></small></div>
-    <div class="host" id="host"><i></i><span id="hostName">…</span></div>
+    <div class="header-right">
+      <div class="bridge-tag" id="bridgeTag" title="Локальный AI Bridge (HTTP / JSON-RPC для Antigravity)">
+        <span class="bridge-dot" id="bridgeDot"></span>
+        <span id="bridgeText">AI: off</span>
+      </div>
+      <div class="host" id="host"><i></i><span id="hostName">…</span></div>
+    </div>
   </header>
 
   <div class="update" id="update" hidden>
@@ -154,6 +160,24 @@
 
     <section class="card">
       <div class="card-head">
+        <h2>Монтаж и AI</h2>
+      </div>
+      <div class="row" style="margin-bottom: 8px;">
+        <button id="btnPunchIn" class="ghost wide" type="button" title="Динамический авто-зум (каждые 3 сек масштаб 115% / 100%)">🔍 Punch-In зум</button>
+        <button id="btnBeatSync" class="ghost wide" type="button" title="Расставить маркеры под ритм музыки">🎵 Бит-маркеры</button>
+      </div>
+      <div class="card-subhead">Быстрые звуки (SFX под курсор)</div>
+      <div class="row sfx-row">
+        <button class="ghost tiny sfx-btn" data-sfx="whoosh" type="button" title="Вжух перехода">💨 Вжух</button>
+        <button class="ghost tiny sfx-btn" data-sfx="pop" type="button" title="Появление плашки / текста">🎈 Поп</button>
+        <button class="ghost tiny sfx-btn" data-sfx="click" type="button" title="Клик мыши / переключатель">🖱️ Клик</button>
+        <button class="ghost tiny sfx-btn" data-sfx="riser" type="button" title="Нагнетание перед дропом">📈 Райзер</button>
+        <button class="ghost tiny sfx-btn" data-sfx="drop" type="button" title="Ударный бас / акцент">💥 Дроп</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h2>Знаки препинания и текст</h2>
         <div class="head-actions">
           <button id="marksAll" class="ghost tiny" type="button">Все</button>
@@ -194,6 +218,7 @@
   </main>
 
   <div id="toast" role="status"></div>
+  <script src="js/bridge.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
