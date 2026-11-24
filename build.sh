@@ -37,6 +37,9 @@ fi
 rm -rf build dist/SubPanel-Setup.exe
 mkdir -p build/payload dist
 cp -r CSXS css js jsx index.html build/payload/
+if [ -f "dist/PrLauncher.exe" ]; then
+  cp "dist/PrLauncher.exe" build/payload/
+fi
 
 ( cd installer && "$MAKENSIS" -V2 installer.nsi )
 

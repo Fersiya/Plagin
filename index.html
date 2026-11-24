@@ -96,7 +96,24 @@
         </div>
       </div>
 
-      <label class="check"><input type="checkbox" id="caps"><span>ВСЕ ЗАГЛАВНЫЕ</span></label>
+      <div class="field">
+        <span>Регистр букв</span>
+        <div class="seg" id="caseSeg">
+          <button type="button" data-case="none">Обычный</button>
+          <button type="button" data-case="upper">КАПС</button>
+          <button type="button" data-case="sentence">Предложения</button>
+          <button type="button" data-case="title">Каждое Слово</button>
+          <button type="button" data-case="lower">строчные</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span>Перенос строк (макс. символов, 0 = выкл)</span>
+        <div class="slider">
+          <input id="wrap" type="range" min="0" max="60" step="2">
+          <input id="wrapNum" type="number" min="0" max="100">
+        </div>
+      </div>
 
       <div class="field ae-only">
         <span>Позиция по вертикали</span>
@@ -116,6 +133,18 @@
       <p class="hint" id="applyHint"></p>
     </section>
 
+    <section class="card ae-only">
+      <div class="card-head">
+        <h2>Анимация (After Effects)</h2>
+      </div>
+      <div class="row">
+        <button id="animBounce" class="ghost wide" type="button" title="Пружинящий вылет Pop-Up">Pop-Up</button>
+        <button id="animFade" class="ghost wide" type="button" title="Появление снизу">Fade Up</button>
+        <button id="animWiggle" class="ghost wide" type="button" title="Живое покачивание">Wiggle</button>
+        <button id="animReset" class="ghost tiny" type="button" title="Сбросить анимацию">Сброс</button>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-head">
         <h2>Знаки препинания</h2>
@@ -127,6 +156,14 @@
       <div id="marks" class="chips marks"></div>
       <button id="strip" class="primary alt" type="button">Убрать знаки в выделенном</button>
       <p class="hint" id="stripHint"></p>
+
+      <div class="row censor-row">
+        <button id="censorBtn" class="ghost wide" type="button" title="Заменить нецензурные слова">Запикать мат (Цензура)</button>
+        <select id="censorStyle" class="ghost">
+          <option value="stars">***</option>
+          <option value="symbols">@#$%</option>
+        </select>
+      </div>
 
       <div class="pr-only">
         <div class="row">

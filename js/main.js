@@ -4,7 +4,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.3.0';
   const REPO = 'Fersiya/Plagin';
   const ASSET = 'SubPanel-Setup.exe';
   const nodeReq = typeof require === 'function' ? require : null; // есть, когда панель запущена с --enable-nodejs
@@ -17,17 +17,23 @@
 
   /* ---------- данные ---------- */
 
-  const DEFAULT_STYLE = { font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, align: 'center', tracking: 0, y: 86 };
+  const DEFAULT_STYLE = { font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, textCase: 'none', align: 'center', tracking: 0, wrap: 0, y: 86 };
+
+  const CENSOR_WORDS = [
+    'бля', 'блять', 'блядь', 'сука', 'сучка', 'хуй', 'хуя', 'хуе', 'хуё', 'хули', 'пиздец', 'пизда', 'пидор', 'пидар',
+    'ебать', 'ебаный', 'ебучий', 'ебал', 'ёбаный', 'ебло', 'мудак', 'мудила', 'гондон', 'гандон', 'залупа', 'чмо',
+    'fuck', 'fucking', 'bitch', 'shit', 'asshole', 'dick', 'cunt', 'bastard', 'whore', 'slut'
+  ];
 
   const BUILTIN = [
-    { id: 'b-classic', name: 'Классика', font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, caps: false, align: 'center', tracking: 0, y: 86 },
-    { id: 'b-shorts', name: 'Шортс', font: 'Impact', size: 96, fill: '#ffe600', stroke: '#000000', strokeW: 12, caps: true, align: 'center', tracking: 10, y: 68 },
-    { id: 'b-mrbeast', name: 'МистерБист', font: 'Impact', size: 90, fill: '#38ef7d', stroke: '#000000', strokeW: 14, caps: true, align: 'center', tracking: 5, y: 50 },
-    { id: 'b-tiktok', name: 'ТикТок', font: 'Arial-BoldMT', size: 72, fill: '#ffffff', stroke: '#000000', strokeW: 8, caps: true, align: 'center', tracking: 5, y: 82 },
-    { id: 'b-cinema', name: 'Кино', font: 'Georgia-Bold', size: 48, fill: '#f4f4f4', stroke: '#000000', strokeW: 2, caps: false, align: 'center', tracking: 25, y: 90 },
-    { id: 'b-neon', name: 'Неон', font: 'Verdana-Bold', size: 64, fill: '#00f0ff', stroke: '#06306b', strokeW: 10, caps: false, align: 'center', tracking: 10, y: 80 },
-    { id: 'b-karaoke', name: 'Караоке', font: 'Arial-BoldMT', size: 78, fill: '#ffffff', stroke: '#7a3cff', strokeW: 14, caps: true, align: 'center', tracking: 5, y: 50 },
-    { id: 'b-minimal', name: 'Минимал', font: 'ArialMT', size: 44, fill: '#ffffff', stroke: '#000000', strokeW: 0, caps: false, align: 'center', tracking: 0, y: 90 },
+    { id: 'b-classic', name: 'Классика', font: 'Arial-BoldMT', size: 60, fill: '#ffffff', stroke: '#000000', strokeW: 6, textCase: 'none', align: 'center', tracking: 0, wrap: 0, y: 86 },
+    { id: 'b-shorts', name: 'Шортс', font: 'Impact', size: 96, fill: '#ffe600', stroke: '#000000', strokeW: 12, textCase: 'upper', align: 'center', tracking: 10, wrap: 32, y: 68 },
+    { id: 'b-mrbeast', name: 'МистерБист', font: 'Impact', size: 90, fill: '#38ef7d', stroke: '#000000', strokeW: 14, textCase: 'upper', align: 'center', tracking: 5, wrap: 28, y: 50 },
+    { id: 'b-tiktok', name: 'ТикТок', font: 'Arial-BoldMT', size: 72, fill: '#ffffff', stroke: '#000000', strokeW: 8, textCase: 'upper', align: 'center', tracking: 5, wrap: 34, y: 82 },
+    { id: 'b-cinema', name: 'Кино', font: 'Georgia-Bold', size: 48, fill: '#f4f4f4', stroke: '#000000', strokeW: 2, textCase: 'none', align: 'center', tracking: 25, wrap: 45, y: 90 },
+    { id: 'b-neon', name: 'Неон', font: 'Verdana-Bold', size: 64, fill: '#00f0ff', stroke: '#06306b', strokeW: 10, textCase: 'none', align: 'center', tracking: 10, wrap: 36, y: 80 },
+    { id: 'b-karaoke', name: 'Караоке', font: 'Arial-BoldMT', size: 78, fill: '#ffffff', stroke: '#7a3cff', strokeW: 14, textCase: 'upper', align: 'center', tracking: 5, wrap: 30, y: 50 },
+    { id: 'b-minimal', name: 'Минимал', font: 'ArialMT', size: 44, fill: '#ffffff', stroke: '#000000', strokeW: 0, textCase: 'none', align: 'center', tracking: 0, wrap: 0, y: 90 },
   ];
 
   const MARKS = [
@@ -122,6 +128,14 @@
         return r.removed
           ? 'Убрано знаков: ' + r.removed + ' в клипах: ' + r.clips + ' из ' + r.total + (r.scope === 'all' ? ' (ничего не было выделено — обработал все клипы)' : '') + '.'
           : 'Выбранных знаков в тексте нет.';
+      case 'anim_applied':
+        return 'Анимация «' + r.anim + '» применена к слоям: ' + r.layers + (r.skipped ? '. Пропущено: ' + r.skipped : '') + '.';
+      case 'censored':
+        return 'Цензура применена: обработано ' + (r.layers || r.clips) + ' слоёв/клипов.';
+      case 'wrapped':
+        return 'Перенос строк выполнен: обработано ' + (r.layers || r.clips) + ' слоёв/клипов.';
+      case 'cased':
+        return 'Регистр изменен: обработано ' + (r.layers || r.clips) + ' слоёв/клипов.';
       case 'srt_imported':
         return r.track
           ? 'Готово: чистый SRT импортирован и добавлен дорожкой подписей.'
@@ -180,6 +194,52 @@
     return cleanText.split(/\r?\n/).map((line) => (/^\d+$/.test(line.trim()) || line.indexOf('-->') > -1 ? line : stripText(line))).join('\r\n');
   }
 
+  function applyCase(text, mode) {
+    if (text === null || text === undefined || text === '') return text;
+    var s = String(text);
+    if (!mode || mode === 'none') return s;
+    if (mode === 'upper') return s.toUpperCase();
+    if (mode === 'lower') return s.toLowerCase();
+    if (mode === 'sentence') {
+      var lower = s.toLowerCase();
+      return lower.replace(/(^|[.!?…\r\n])(\s*["'«“„»”\(\[\{\—\–\-]*\s*)([a-zа-яё])/g, function (m, p1, p2, p3) {
+        return p1 + p2 + p3.toUpperCase();
+      });
+    }
+    if (mode === 'title') {
+      return s.toLowerCase().replace(/(^|[ \t\r\n"«'“„(\[\{—–-])([a-zа-яё])/g, function (m, p1, p2) {
+        return p1 + p2.toUpperCase();
+      });
+    }
+    return s;
+  }
+
+  function maskText(text, words, style) {
+    if (text === null || text === undefined || text === '') return text;
+    if (!words || !words.length) return text;
+    var out = String(text);
+    var maskPattern = style === 'symbols' ? '@#$%' : '***';
+    for (var i = 0; i < words.length; i++) {
+      var rawW = words[i];
+      if (rawW === null || rawW === undefined) continue;
+      var w = String(rawW);
+      if (w.length < 2) continue;
+      var escW = w.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&').replace(/[её]/gi, '[еёЁЕ]');
+      try {
+        var re = new RegExp('(^|[^a-zA-Zа-яА-ЯёЁ0-9_])(' + escW + ')(?=[^a-zA-Zа-яА-ЯёЁ0-9_]|$)', 'gi');
+        out = out.replace(re, function (match, p1, p2) {
+          var rep = maskPattern;
+          if (maskPattern === '***') {
+            rep = '';
+            for (var k = 0; k < p2.length; k++) rep += '*';
+          }
+          return p1 + rep;
+        });
+      } catch (e) {}
+    }
+    return out;
+  }
+
   /* ---------- интерфейс ---------- */
 
   function familyOf(ps) {
@@ -205,11 +265,16 @@
     sub.style.fontWeight = /bold|black|heavy|extra|impact/i.test(st.font) ? '800' : '500';
     sub.style.fontSize = Math.max(7, st.size * scale) + 'px';
     sub.style.color = st.fill;
-    sub.style.textTransform = st.caps ? 'uppercase' : 'none';
     sub.style.textShadow = outline((st.strokeW * scale) / 2, st.stroke);
     sub.style.top = st.y + '%';
     sub.style.textAlign = st.align || 'center';
     sub.style.letterSpacing = ((st.tracking || 0) * scale * 0.15).toFixed(1) + 'px';
+
+    var sample = 'Привет, это пример субтитров!';
+    if (st.textCase && st.textCase !== 'none') {
+      sample = applyCase(sample, st.textCase);
+    }
+    sub.textContent = sample;
   }
 
   function chipStyle(aa, p) {
@@ -262,9 +327,10 @@
       fill: p.fill,
       stroke: p.stroke,
       strokeW: p.strokeW,
-      caps: p.caps,
+      textCase: p.textCase || 'none',
       align: p.align || 'center',
       tracking: p.tracking || 0,
+      wrap: p.wrap || 0,
       y: p.y,
       activeId: p.id
     });
@@ -303,15 +369,17 @@
     $('#strokeHex').textContent = st.stroke;
     $('#strokeW').value = st.strokeW;
     $('#strokeWNum').value = st.strokeW;
-    $('#caps').checked = !!st.caps;
     $('#tracking').value = st.tracking || 0;
     $('#trackingNum').value = st.tracking || 0;
+    $('#wrap').value = st.wrap || 0;
+    $('#wrapNum').value = st.wrap || 0;
     $('#y').value = st.y;
     $('#yNum').value = st.y;
     $('#applyPos').checked = !!st.applyPos;
     $('#instant').checked = !!st.instant;
     $$('#posSeg button').forEach((b) => b.classList.toggle('on', Number(b.dataset.y) === Number(st.y)));
     $$('#alignSeg button').forEach((b) => b.classList.toggle('on', (b.dataset.align || 'center') === (st.align || 'center')));
+    $$('#caseSeg button').forEach((b) => b.classList.toggle('on', (b.dataset.case || 'none') === (st.textCase || 'none')));
   }
 
   function bind(id, key, parse, after) {
@@ -364,12 +432,24 @@
       fill: st.fill,
       stroke: st.stroke,
       strokeW: st.strokeW,
-      caps: st.caps,
+      textCase: st.textCase || 'none',
       align: st.align || 'center',
       tracking: st.tracking || 0,
+      maxChars: st.wrap || 0,
       y: st.y,
       applyPos: st.applyPos
     });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onAnim(type) {
+    const r = await callHost('anim', { anim: type });
+    toast(describe(r), !r.ok);
+  }
+
+  async function onCensor() {
+    const style = $('#censorStyle').value || 'stars';
+    const r = await callHost('censor', { words: CENSOR_WORDS, style: style });
     toast(describe(r), !r.ok);
   }
 
@@ -601,7 +681,8 @@
     bind('#strokeWNum', 'strokeW', num(0, 200));
     bind('#tracking', 'tracking', num(-200, 500));
     bind('#trackingNum', 'tracking', num(-200, 500));
-    bind('#caps', 'caps', (v) => !!v);
+    bind('#wrap', 'wrap', num(0, 100));
+    bind('#wrapNum', 'wrap', num(0, 100));
     bind('#y', 'y', num(0, 100));
     bind('#yNum', 'y', num(0, 100));
     $('#applyPos').addEventListener('change', (e) => { st.applyPos = e.target.checked; save(); });
@@ -615,6 +696,12 @@
 
     $$('#alignSeg button').forEach((b) => b.addEventListener('click', () => {
       st.align = b.dataset.align || 'center';
+      st.activeId = null;
+      syncInputs(); renderPresets(); renderPreview(); save();
+    }));
+
+    $$('#caseSeg button').forEach((b) => b.addEventListener('click', () => {
+      st.textCase = b.dataset.case || 'none';
       st.activeId = null;
       syncInputs(); renderPresets(); renderPreview(); save();
     }));
@@ -652,9 +739,10 @@
         fill: st.fill,
         stroke: st.stroke,
         strokeW: st.strokeW,
-        caps: st.caps,
+        textCase: st.textCase || 'none',
         align: st.align || 'center',
         tracking: st.tracking || 0,
+        wrap: st.wrap || 0,
         y: st.y
       };
       userPresets.push(p);
@@ -669,8 +757,14 @@
 
     $('#apply').addEventListener('click', (e) => run(e.currentTarget, onApply));
     $('#strip').addEventListener('click', (e) => run(e.currentTarget, onStrip));
+    $('#censorBtn').addEventListener('click', (e) => run(e.currentTarget, onCensor));
     $('#clip').addEventListener('click', (e) => run(e.currentTarget, onClip));
     $('#srt').addEventListener('click', (e) => run(e.currentTarget, onSrt));
+
+    $('#animBounce').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('bounce')));
+    $('#animFade').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('fade')));
+    $('#animWiggle').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('wiggle')));
+    $('#animReset').addEventListener('click', (e) => run(e.currentTarget, () => onAnim('reset')));
 
     $('#manualClean').addEventListener('click', () => {
       const ta = $('#manual');

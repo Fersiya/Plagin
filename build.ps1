@@ -56,7 +56,21 @@ if (-not $makensis) {
 
 Write-Host "Используется NSIS: $makensis" -ForegroundColor Gray
 
-# 3. Подготовка структуры каталогов
+# 3. Компиляция PrLauncher.exe
+Write-Host "==> Сборка PrLauncher.exe..." -ForegroundColor Cyan
+$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if (Test-Path $csc) {
+    & $csc /target:winexe /optimize+ /out:"dist\PrLauncher.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll /r:System.Core.dll "launcher\PrLauncher.cs"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Ошибка компиляции PrLauncher.cs!"
+        exit 1
+    }
+    Write-Host "PrLauncher.exe скомпилирован успешно!" -ForegroundColor Green
+} else {
+    Write-Warning "csc.exe не найден, пропускаем компиляцию PrLauncher"
+}
+
+# 4. Подготовка структуры каталогов
 Write-Host "==> Подготовка файлов сборки..." -ForegroundColor Cyan
 if (Test-Path "build") {
     Remove-Item -Recurse -Force "build"
@@ -65,8 +79,11 @@ New-Item -ItemType Directory -Force -Path "build\payload" | Out-Null
 New-Item -ItemType Directory -Force -Path "dist" | Out-Null
 
 Copy-Item -Recurse -Force CSXS, css, js, jsx, index.html "build\payload\"
+if (Test-Path "dist\PrLauncher.exe") {
+    Copy-Item -Force "dist\PrLauncher.exe" "build\payload\"
+}
 
-# 4. Компиляция инсталлятора
+# 5. Компиляция инсталлятора
 Write-Host "==> Сборка инсталлятора с помощью NSIS..." -ForegroundColor Cyan
 Push-Location "installer"
 try {
@@ -84,13 +101,30 @@ if (-not (Test-Path $outputExe)) {
     exit 1
 }
 
-# 5. Хэш и результат
+# 6. Хэши и результат
 $fileItem = Get-Item $outputExe
-$sha = (Get-FileHash -Algorithm SHA256 $outputExe).Hash.ToLower()
+$shaSetup = (Get-FileHash -Algorithm SHA256 (Join-Path $PSScriptRoot "dist\SubPanel-Setup.exe")).Hash.ToLower()
+
+$shaLauncher = ""
+$launcherPath = Join-Path $PSScriptRoot "dist\PrLauncher.exe"
+if (Test-Path $launcherPath) {
+    $shaLauncher = (Get-FileHash -Algorithm SHA256 $launcherPath).Hash.ToLower()
+}
+
+$sumsContent = "$shaSetup  SubPanel-Setup.exe`r`n"
+if ($shaLauncher) {
+    $sumsContent += "$shaLauncher  PrLauncher.exe`r`n"
+}
+$sumsPath = Join-Path $PSScriptRoot "dist\SHA256SUMS.txt"
+[System.IO.File]::WriteAllText($sumsPath, $sumsContent, [System.Text.Encoding]::UTF8)
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Сборка успешно завершена!" -ForegroundColor Green
-Write-Host "Файл:    $($fileItem.FullName)"
-Write-Host "Размер:  $([math]::Round($fileItem.Length / 1KB, 1)) КБ"
-Write-Host "SHA-256: $sha"
+Write-Host "Инсталлятор: $($fileItem.FullName) ($([math]::Round($fileItem.Length / 1KB, 1)) КБ)"
+Write-Host "SHA-256:     $shaSetup"
+if ($shaLauncher) {
+    $launcherItem = Get-Item $launcherPath
+    Write-Host "Лаунчер:     $($launcherItem.FullName) ($([math]::Round($launcherItem.Length / 1KB, 1)) КБ)"
+    Write-Host "SHA-256:     $shaLauncher"
+}
 Write-Host "========================================" -ForegroundColor Green

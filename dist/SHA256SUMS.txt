@@ -1,1 +1,2 @@
-﻿299cd4aedafb32d8303bd29fa22e2f49151fbb11b2ff1a70f9c6a719ba49bc97  SubPanel-Setup.exe
+﻿2df69b773da110234ef24c1e1a26a05cfd1093fb69ee8694d502a4b9badfc061  SubPanel-Setup.exe
+754500147d26ba419ba0045b72dafe220e8cc9ac379c3466923c8aefd76d474e  PrLauncher.exe

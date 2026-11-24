@@ -6,7 +6,7 @@ SetCompressor /SOLID lzma
 
 !define APPNAME "SubPanel"
 !define EXTID "com.fersiya.subpanel"
-!define VERSION "1.2.0"
+!define VERSION "1.3.0"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${EXTID}"
 
 Name "${APPNAME} ${VERSION}"
@@ -38,6 +38,14 @@ Section "Install"
   File /r "..\build\payload\*.*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
+  ; Создание ярлыков для быстрого лаунчера PrLauncher
+  ${If} ${FileExists} "$INSTDIR\PrLauncher.exe"
+    CreateDirectory "$SMPROGRAMS\SubPanel"
+    CreateShortcut "$SMPROGRAMS\SubPanel\PrLauncher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск проектов Premiere Pro"
+    CreateShortcut "$SMPROGRAMS\SubPanel\Удалить SubPanel.lnk" "$INSTDIR\Uninstall.exe"
+    CreateShortcut "$DESKTOP\PrLauncher.lnk" "$INSTDIR\PrLauncher.exe" "" "$INSTDIR\PrLauncher.exe" 0 "" "" "Быстрый запуск проектов Premiere Pro"
+  ${EndIf}
+
   ; Неподписанные панели CEP загружаются только при включённом PlayerDebugMode.
   ; Включаем для версий CSXS 9-20 (Adobe CC 2019 - 2026+)
   ${ForEach} $0 9 20 + 1
@@ -55,6 +63,10 @@ Section "Install"
 SectionEnd
 
 Section "Uninstall"
+  ; Удаление ярлыков
+  Delete "$DESKTOP\PrLauncher.lnk"
+  RMDir /r "$SMPROGRAMS\SubPanel"
+
   ; PlayerDebugMode не трогаем: он может быть нужен другим панелям.
   RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "${UNINST_KEY}"
